@@ -1,0 +1,65 @@
+<!-- admin_log.html -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-history"></i> ประวัติการใช้งานระบบ (System Logs)</h5>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadLogs()">
+      <i class="fa fa-sync"></i> รีเฟรช
+    </button>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle" id="logTable">
+        <thead class="table-light">
+          <tr>
+            <th>วัน-เวลา</th>
+            <th>ผู้ใช้งาน</th>
+            <th>ระดับสิทธิ์</th>
+            <th>การกระทำ</th>
+            <th>รายละเอียด</th>
+          </tr>
+        </thead>
+        <tbody id="logBody">
+          <!-- Data will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  function loadLogs() {
+    const tbody = document.getElementById('logBody');
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">กำลังโหลดข้อมูล...</td></tr>';
+    
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        if (res.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center">ไม่พบข้อมูลประวัติ</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = res.data.map(log => {
+          const date = new Date(log.timestamp).toLocaleString('th-TH');
+          let badgeClass = 'bg-secondary';
+          if (log.action.includes('LOGIN_SUCCESS')) badgeClass = 'bg-success';
+          if (log.action.includes('LOGIN_FAILED')) badgeClass = 'bg-danger';
+          if (log.action.includes('DELETE')) badgeClass = 'bg-warning text-dark';
+          
+          return `
+            <tr>
+              <td><small>${date}</small></td>
+              <td>${log.userId}</td>
+              <td><span class="badge bg-info text-dark">${log.role}</span></td>
+              <td><span class="badge ${badgeClass}">${log.action}</span></td>
+              <td><small>${log.detail}</small></td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">เกิดข้อผิดพลาด: ${res.message}</td></tr>`;
+      }
+    }).getLogs();
+  }
+
+  loadLogs();
+</script>

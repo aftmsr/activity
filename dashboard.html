@@ -1,0 +1,45 @@
+<!-- dashboard.html -->
+<div class="row">
+  <div class="col-md-4">
+    <div class="card bg-primary text-white p-3 mb-3 text-center">
+      <h5>กิจกรรมทั้งหมด</h5>
+      <h2 id="totalAct">0</h2>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-success text-white p-3 mb-3 text-center">
+      <h5>เฉลี่ยการเข้าร่วม</h5>
+      <h2 id="avgAtt">0%</h2>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-warning p-3 mb-3 text-center">
+      <h5>อุทธรณ์ที่รอตรวจ</h5>
+      <h2 id="pendingAppeals">0</h2>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <canvas id="attendanceChart" width="400" height="200"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  function loadDashboard() {
+    // จำลองข้อมูลสถิติ
+    const ctx = document.getElementById('attendanceChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['ปี 2566/1', 'ปี 2566/2', 'ปี 2567/1'],
+        datasets: [{
+          label: '% การเข้าร่วมภาพรวม',
+          data: [85, 78, 92],
+          backgroundColor: 'rgba(54, 162, 235, 0.5)'
+        }]
+      }
+    });
+  }
+  loadDashboard();
+</script>

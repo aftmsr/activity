@@ -1,0 +1,56 @@
+<!-- scanner.html -->
+<div class="card p-3">
+  <h4 class="mb-3"><i class="fa fa-qrcode"></i> สแกนบันทึกการเข้าร่วม</h4>
+  <div class="mb-3">
+    <label>เลือกกิจกรรมปัจจุบัน:</label>
+    <select id="activeActId" class="form-select"></select>
+  </div>
+  
+  <div id="reader" style="width: 100%; max-width: 500px; margin: auto;"></div>
+  
+  <div id="scanResult" class="mt-3 alert hidden"></div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+  function initScanner() {
+    // โหลดกิจกรรมของวันนี้มาให้เลือกก่อน
+    google.script.run.withSuccessHandler(res => {
+      const select = document.getElementById('activeActId');
+      res.data.forEach(act => {
+        const opt = document.createElement('option');
+        opt.value = act.actId;
+        opt.text = act.name;
+        select.add(opt);
+      });
+    }).getActivities(); // ปรับแต่ง filter ใน activityModule ให้กรองเฉพาะวันนี้ได้
+
+    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+      fps: 10, 
+      qrbox: {width: 250, height: 250},
+      formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128 ]
+    });
+    
+    html5QrcodeScanner.render(onScanSuccess);
+  }
+
+  function onScanSuccess(decodedText) {
+    const actId = document.getElementById('activeActId').value;
+    if(!actId) { alert('กรุณาเลือกกิจกรรม'); return; }
+
+    const resultDiv = document.getElementById('scanResult');
+    resultDiv.className = "alert alert-info";
+    resultDiv.innerText = "กำลังประมวลผล...";
+    resultDiv.classList.remove('hidden');
+
+    google.script.run.withSuccessHandler(res => {
+      resultDiv.className = res.success ? "alert alert-success" : "alert alert-danger";
+      resultDiv.innerText = res.message;
+      if(res.success) {
+        // เล่นเสียงแจ้งเตือนสั้นๆ (Optional)
+        new Audio('https://www.soundjay.com/buttons/beep-01a.mp3').play();
+      }
+    }).recordAttendance(decodedText, actId);
+  }
+  initScanner();
+</script>

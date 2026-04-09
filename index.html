@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Sarabun', sans-serif; background: #f4f7f6; overflow-x: hidden; }
+    .sidebar { height: 100vh; background: #1a252f; color: white; position: fixed; width: 260px; transition: 0.3s; z-index: 1000; }
+    .content { margin-left: 260px; padding: 30px; transition: 0.3s; }
+    .nav-link { color: #95a5a6; cursor: pointer; padding: 12px 20px; border-radius: 0; transition: 0.2s; border-left: 4px solid transparent; }
+    .nav-link:hover, .nav-link.active { color: white; background: #2c3e50; border-left: 4px solid #3498db; }
+    .nav-link i { margin-right: 10px; width: 20px; text-align: center; }
+    .user-info { padding: 20px; background: #121920; border-bottom: 1px solid #2c3e50; }
+    .hidden { display: none !important; }
+    .loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 9999; }
+    @media (max-width: 768px) { .sidebar { left: -260px; } .sidebar.active { left: 0; } .content { margin-left: 0; } }
+  </style>
+</head>
+<body>
+
+  <div id="loader" class="loader hidden"><div class="spinner-border text-primary"></div></div>
+
+  <!-- Login Section -->
+  <div id="loginSection" class="container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-5">
+        <div class="card shadow-lg border-0">
+          <div class="card-body p-5 text-center">
+            <img src="https://www.msr.ac.th/wp-content/uploads/2021/08/logo-msr.png" alt="Logo" style="width: 100px;" class="mb-4">
+            <h4 class="fw-bold mb-4">ระบบบริหารจัดการกิจกรรม</h4>
+            <p class="text-muted mb-4">วิทยาลัยการอาชีพแม่สะเรียง</p>
+            <input type="email" id="email" class="form-control mb-3" placeholder="อีเมลแอดเดรส">
+            <input type="password" id="password" class="form-control mb-4" placeholder="รหัสผ่าน">
+            <button onclick="handleLogin()" class="btn btn-primary w-100 py-2">เข้าสู่ระบบ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div id="mainLayout" class="hidden">
+    <div class="sidebar" id="sidebar">
+      <div class="user-info text-center">
+        <div class="avatar mb-2"><i class="fa fa-user-circle fa-3x"></i></div>
+        <div id="userName" class="fw-bold">User Name</div>
+        <small id="userRole" class="text-info text-uppercase">Role</small>
+      </div>
+      <nav class="nav flex-column mt-3" id="menuList">
+        <!-- Dynamic Menu -->
+      </nav>
+      <div style="position: absolute; bottom: 0; width: 100%; p: 10px;">
+        <button onclick="handleLogout()" class="nav-link w-100 text-start border-0 bg-transparent text-danger">
+          <i class="fa fa-sign-out-alt"></i> ออกจากระบบ
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="dynamicContent"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+
+    function showLoader(show) {
+      document.getElementById('loader').classList.toggle('hidden', !show);
+    }
+
+    function handleLogin() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      showLoader(true);
+      google.script.run
+        .withSuccessHandler(res => {
+          showLoader(false);
+          if(res.success) {
+            currentUser = res.user;
+            initUI();
+          } else {
+            alert(res.message);
+          }
+        })
+        .login(email, password);
+    }
+
+    function initUI() {
+      document.getElementById('loginSection').classList.add('hidden');
+      document.getElementById('mainLayout').classList.remove('hidden');
+      document.getElementById('userName').innerText = currentUser.name;
+      document.getElementById('userRole').innerText = currentUser.role;
+      renderMenu();
+      loadPage('DASHBOARD');
+    }
+
+    function renderMenu() {
+      const menu = document.getElementById('menuList');
+      let html = `<a class="nav-link active" onclick="loadPage('DASHBOARD')"><i class="fa fa-th-large"></i> แผงควบคุม</a>`;
+      
+      if(['ADMIN', 'STAFF'].includes(currentUser.role)) {
+        html += `<a class="nav-link" onclick="loadPage('ACTIVITY')"><i class="fa fa-calendar-alt"></i> กิจกรรม</a>`;
+        html += `<a class="nav-link" onclick="loadPage('REPORT')"><i class="fa fa-chart-line"></i> รายงานสถิติ</a>`;
+      }
+      if(['ADMIN', 'อวท.'].includes(currentUser.role)) {
+        html += `<a class="nav-link" onclick="loadPage('SCANNER')"><i class="fa fa-qrcode"></i> สแกนเช็คชื่อ</a>`;
+      }
+      if(currentUser.role === 'STUDENT') {
+        html += `<a class="nav-link" onclick="loadPage('APPEAL')"><i class="fa fa-edit"></i> ยื่นอุทธรณ์</a>`;
+      }
+      if(currentUser.role === 'ADMIN') {
+        html += `<a class="nav-link" onclick="loadPage('ADMIN_LOG')"><i class="fa fa-history"></i> ประวัติการใช้งาน</a>`;
+      }
+      menu.innerHTML = html;
+    }
+
+    function loadPage(page) {
+      const container = document.getElementById('dynamicContent');
+      showLoader(true);
+      
+      // Update active menu
+      document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+      event?.target?.classList.add('active');
+
+      google.script.run.withSuccessHandler(html => {
+        container.innerHTML = html;
+        showLoader(false);
+      }).include(page.toLowerCase());
+    }
+
+    function handleLogout() {
+      google.script.run.withSuccessHandler(() => location.reload()).logout();
+    }
+  </script>
+</body>
+</html>
