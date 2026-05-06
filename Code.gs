@@ -58,7 +58,7 @@ function fetchRemoteHtml(filename) {
 
     const response = UrlFetchApp.fetch(url, { 'muteHttpExceptions': true });
     if (response.getResponseCode() !== 200) {
-      return `<!-- Error: Could not fetch ${filename}.html (Status: ${response.getResponseCode()}) -->`;
+      return `<div class="alert alert-danger">ไม่สามารถโหลดหน้า ${filename} ได้ (Error: ${response.getResponseCode()})</div>`;
     }
     
     const content = response.getContentText();
@@ -66,7 +66,7 @@ function fetchRemoteHtml(filename) {
     cache.put(filename, content, 60); 
     return content;
   } catch (e) {
-    return `<!-- Error fetching remote file: ${e.toString()} -->`;
+    return `<div class="alert alert-danger">เกิดข้อผิดพลาดในการเชื่อมต่อ GitHub: ${e.toString()}</div>`;
   }
 }
 

@@ -22,14 +22,18 @@ function setupDatabase() {
     let sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
+      sheet.getRange(1, 1, 1, tables[sheetName].length)
+           .setValues([tables[sheetName]])
+           .setFontWeight('bold')
+           .setBackground('#f3f3f3');
+      sheet.setFrozenRows(1);
     } else {
-      sheet.clear(); // ล้างข้อมูลเก่าเพื่อสร้าง Header ใหม่ (ระวัง: ข้อมูลจะหาย)
+      // หากมี Sheet แล้ว ตรวจสอบแค่ Header ว่าครบถ้วนไหม (ไม่ล้างข้อมูลเดิม)
+      const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 1).getValues()[0];
+      if (currentHeaders[0] === "") {
+        sheet.getRange(1, 1, 1, tables[sheetName].length).setValues([tables[sheetName]]).setFontWeight('bold');
+      }
     }
-    sheet.getRange(1, 1, 1, tables[sheetName].length)
-         .setValues([tables[sheetName]])
-         .setFontWeight('bold')
-         .setBackground('#f3f3f3');
-    sheet.setFrozenRows(1);
   }
 
   // สร้าง User Admin เริ่มต้น
