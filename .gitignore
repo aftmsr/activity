@@ -1,0 +1,11 @@
+# เก็บข้อมูลลับของ Google Apps Script (clasp)
+.clasp.json
+creds.json
+
+# ไฟล์บันทึก Error หรือ Log ส่วนตัว
+*.log
+npm-debug.log*
+
+# โฟลเดอร์ที่ไม่จำเป็น
+node_modules/
+.DS_Store

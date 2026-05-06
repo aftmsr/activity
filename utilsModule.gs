@@ -33,7 +33,31 @@ function setupDatabase() {
 
   // สร้าง User Admin เริ่มต้น
   const userSheet = ss.getSheetByName('Users');
-  userSheet.appendRow(['ADMIN-01', 'ผู้ดูแลระบบ', 'ADMIN', 'admin@msr.ac.th', '123456', 'ACTIVE', new Date()]);
+  // ป้องกันการสร้าง Admin ซ้ำและไม่ Hardcode รหัสผ่านในโค้ดระยะยาว
+  // ตรวจสอบว่ามี Admin อยู่แล้วหรือไม่ (โดยดูจาก role)
+  const existingAdmins = userSheet.getDataRange().getValues().slice(1).filter(row => row[2] === 'ADMIN');
+  if (existingAdmins.length === 0) {
+    const defaultAdminEmail = "admin@msr.ac.th";
+    const defaultAdminPass = "CHANGE_ME_IMMEDIATELY"; // ให้เปลี่ยนทันทีหลัง Setup
+    userSheet.appendRow(['ADMIN-01', 'ผู้ดูแลระบบ', 'ADMIN', defaultAdminEmail, hashPassword(defaultAdminPass), 'ACTIVE', new Date()]);
+    Logger.log(`Default Admin created: ${defaultAdminEmail} with password "${defaultAdminPass}". PLEASE CHANGE IT IMMEDIATELY!`);
+  }
   
   return "Database Setup Completed Successfully!";
+}
+
+/**
+ * ฟังก์ชันสำหรับตรวจสอบและกระตุ้นการขอสิทธิ์เข้าถึง Google Drive และบริการอื่นๆ
+ */
+function checkSystemPermissions() {
+  try {
+    // ทดสอบเข้าถึง Drive
+    const folderName = "Student_Appeals_Images";
+    let folders = DriveApp.getFoldersByName(folderName);
+    let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+    
+    return "✅ สิทธิ์การเข้าถึงถูกต้อง: Google Drive พร้อมใช้งาน (Folder ID: " + folder.getId() + ")";
+  } catch (e) {
+    return "❌ เกิดข้อผิดพลาดในการขอสิทธิ์: " + e.toString();
+  }
 }
