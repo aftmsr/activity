@@ -2,6 +2,72 @@
 <html>
 <head>
   <base target="_top">
+  <script>
+    // Configuration for Decoupled Web App
+    const BACKEND_API_URL = "https://script.google.com/macros/s/AKfycbxhos3WZiIDJic5qZUrrFsWh9kkC4894SyjLiYdEYV8J1ggpw8Zv0G1ovcXhW1eYcqn/exec";
+
+    function callServer(functionName, args = []) {
+      return fetch(BACKEND_API_URL, {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          functionName: functionName,
+          arguments: args
+        })
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("HTTP error " + response.status);
+        }
+        return response.json();
+      });
+    }
+
+    // Mock google.script.run using ES6 Proxy
+    window.google = window.google || {};
+    window.google.script = window.google.script || {};
+    window.google.script.run = new Proxy({}, {
+      get: function(target, prop) {
+        if (prop === "withSuccessHandler") {
+          return function(callback) {
+            window.google.script.run._successHandler = callback;
+            return window.google.script.run;
+          };
+        }
+        if (prop === "withFailureHandler") {
+          return function(callback) {
+            window.google.script.run._failureHandler = callback;
+            return window.google.script.run;
+          };
+        }
+        
+        // Return a function dynamically for the requested backend method name
+        return function(...args) {
+          const successHandler = window.google.script.run._successHandler || (() => {});
+          const failureHandler = window.google.script.run._failureHandler || (err => console.error("Server Error:", err));
+          
+          // Clear callbacks for the next execution
+          window.google.script.run._successHandler = null;
+          window.google.script.run._failureHandler = null;
+          
+          callServer(prop, args)
+            .then(res => {
+              if (res && res.success === false) {
+                failureHandler(res.error || "Unknown server error");
+              } else {
+                successHandler(res.result !== undefined ? res.result : res);
+              }
+            })
+            .catch(err => {
+              failureHandler(err);
+            });
+        };
+      }
+    });
+  </script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
@@ -38,12 +104,7 @@
             <button onclick="handleLogin()" class="btn btn-primary w-100 py-2">เข้าสู่ระบบ</button>
             <div class="my-3 text-muted">หรือ</div>
             <!-- Google Sign-In Button Container -->
-            <!-- Client ID ดึงจาก Script Properties (GOOGLE_CLIENT_ID) ผ่าน CONFIG -->
-            <div id="g_id_onload"
-                 data-client_id="<?= CONFIG.GOOGLE_CLIENT_ID ?>"
-                 data-callback="onGoogleSignIn">
-            </div>
-            <div class="g_id_signin" data-type="standard"></div>
+            <div id="g_id_signin_btn" class="d-flex justify-content-center"></div>
           </div>
         </div>
       </div>
@@ -183,23 +244,69 @@
       menu.innerHTML = html;
     }
 
+    function executeScripts(container) {
+      const scripts = container.querySelectorAll("script");
+      scripts.forEach(oldScript => {
+        const newScript = document.createElement("script");
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      });
+    }
+
     function loadPage(page) {
       const container = document.getElementById('dynamicContent');
       showLoader(true);
       
       // Update active menu
       document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-      event?.target?.classList.add('active');
+      
+      // Find the menu item with page name to make active
+      document.querySelectorAll('.nav-link').forEach(el => {
+        if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(page)) {
+          el.classList.add('active');
+        }
+      });
 
-      google.script.run.withSuccessHandler(html => {
-        container.innerHTML = html;
-        showLoader(false);
-      }).include(page.toLowerCase());
+      fetch(page.toLowerCase() + '.html')
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to load page " + page);
+          return res.text();
+        })
+        .then(html => {
+          container.innerHTML = html;
+          executeScripts(container);
+          showLoader(false);
+        })
+        .catch(err => {
+          console.error(err);
+          container.innerHTML = `<div class="alert alert-danger mt-3">เกิดข้อผิดพลาดในการโหลดหน้าเว็บ: ${err.message}</div>`;
+          showLoader(false);
+        });
     }
 
     function handleLogout() {
       google.script.run.withSuccessHandler(() => location.reload()).logout();
     }
+
+    // Fetch Google Client ID and initialize Google Sign-In dynamically
+    window.addEventListener('DOMContentLoaded', () => {
+      google.script.run
+        .withSuccessHandler(clientId => {
+          if (clientId && window.google && window.google.accounts) {
+            window.google.accounts.id.initialize({
+              client_id: clientId,
+              callback: onGoogleSignIn
+            });
+            window.google.accounts.id.renderButton(
+              document.getElementById("g_id_signin_btn"),
+              { theme: "outline", size: "large", width: "100%" }
+            );
+          }
+        })
+        .withFailureHandler(err => console.error("Error fetching client ID:", err))
+        .getGoogleClientId();
+    });
   </script>
 </body>
 </html>
