@@ -72,7 +72,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
   <!-- Google Identity Services Library -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" onload="onGoogleLibraryLoad()"></script>
   <style>
     body { font-family: 'Sarabun', sans-serif; background: #f4f7f6; overflow-x: hidden; }
     .sidebar { height: 100vh; background: #1a252f; color: white; position: fixed; width: 260px; transition: 0.3s; z-index: 1000; }
@@ -289,19 +289,36 @@
       google.script.run.withSuccessHandler(() => location.reload()).logout();
     }
 
-    // Fetch Google Client ID and initialize Google Sign-In dynamically
+    // Fetch Google Client ID and initialize Google Sign-In dynamically with race condition safety
+    let googleLibraryReady = false;
+    let fetchedClientId = null;
+
+    function renderGoogleButton() {
+      if (fetchedClientId && googleLibraryReady) {
+        if (window.google && window.google.accounts) {
+          window.google.accounts.id.initialize({
+            client_id: fetchedClientId,
+            callback: onGoogleSignIn
+          });
+          window.google.accounts.id.renderButton(
+            document.getElementById("g_id_signin_btn"),
+            { theme: "outline", size: "large", width: "100%" }
+          );
+        }
+      }
+    }
+
+    function onGoogleLibraryLoad() {
+      googleLibraryReady = true;
+      renderGoogleButton();
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       google.script.run
         .withSuccessHandler(clientId => {
-          if (clientId && window.google && window.google.accounts) {
-            window.google.accounts.id.initialize({
-              client_id: clientId,
-              callback: onGoogleSignIn
-            });
-            window.google.accounts.id.renderButton(
-              document.getElementById("g_id_signin_btn"),
-              { theme: "outline", size: "large", width: "100%" }
-            );
+          if (clientId) {
+            fetchedClientId = clientId;
+            renderGoogleButton();
           }
         })
         .withFailureHandler(err => console.error("Error fetching client ID:", err))
