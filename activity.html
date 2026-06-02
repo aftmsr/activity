@@ -1,53 +1,286 @@
 <!-- activity.html -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
-
 <div class="card shadow-sm">
   <div class="card-header bg-white d-flex justify-content-between align-items-center">
-    <h5 class="mb-0 text-primary"><i class="fa fa-calendar-alt"></i> ปฏิทินกิจกรรมนักศึกษา</h5>
-    <button class="btn btn-sm btn-success" onclick="openAddModal()">
-      <i class="fa fa-plus"></i> เพิ่มกิจกรรมใหม่
-    </button>
+    <h5 class="mb-0 text-primary"><i class="fa fa-calendar-alt"></i> จัดการกิจกรรมวิทยาลัย</h5>
+    <div class="d-flex gap-2">
+      <div class="input-group input-group-sm" style="width: 250px;">
+        <span class="input-group-text"><i class="fa fa-search"></i></span>
+        <input type="text" id="searchAct" class="form-control" placeholder="ค้นหากิจกรรม..." onkeyup="filterActivities()">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openActivityModal()">
+        <i class="fa fa-plus-circle"></i> สร้างกิจกรรมใหม่
+      </button>
+      <button class="btn btn-info btn-sm text-white" onclick="openBatchAttendanceModal()">
+        <i class="fa fa-users"></i> บันทึกเข้าร่วมแบบกลุ่ม
+      </button>
+    </div>
   </div>
   <div class="card-body">
-    <div id="calendar"></div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>ชื่อกิจกรรม</th>
+            <th>วันที่</th>
+            <th>สถานที่</th>
+            <th>ปีการศึกษา/เทอม</th>
+            <th>ประเภท</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="activityTableBody">
+          <tr><td colspan="6" class="text-center">กำลังโหลดข้อมูล...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal แบบฟอร์มกิจกรรม -->
+<div class="modal fade" id="activityModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">รายละเอียดกิจกรรม</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="activityForm">
+          <input type="hidden" id="actId">
+          <div class="mb-3">
+            <label class="form-label">ชื่อกิจกรรม</label>
+            <input type="text" id="actName" class="form-control" required>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">วันที่</label>
+              <input type="date" id="actDate" class="form-control" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">ประเภท</label>
+              <select id="actType" class="form-select">
+                <option value="ทั่วไป">ทั่วไป</option>
+                <option value="ชมรม">ชมรม</option>
+                <option value="พิเศษ">พิเศษ</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">สถานที่</label>
+            <input type="text" id="actLocation" class="form-control">
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">ปีการศึกษา</label>
+              <input type="number" id="actYear" class="form-control" value="2567">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">ภาคเรียน</label>
+              <select id="actSemester" class="form-select">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="ฤดูร้อน">ฤดูร้อน</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label text-primary fw-bold">คะแนนกิจกรรม</label>
+            <input type="number" id="actPoints" class="form-control" value="1" step="0.5">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" onclick="submitActivity()">บันทึกข้อมูล</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal บันทึกเข้าร่วมแบบกลุ่ม -->
+<div class="modal fade" id="batchAttendanceModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">บันทึกการเข้าร่วมกิจกรรมแบบกลุ่ม</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">เลือกกิจกรรม</label>
+          <select id="batchActId" class="form-select" onchange="loadStudentsForBatchAttendance()"></select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">เลือกนักเรียนที่เข้าร่วม (เฉพาะผู้ที่ยังไม่เข้าร่วมกิจกรรมนี้)</label>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="selectAllStudents" onchange="toggleSelectAllStudents(this)">
+            <label class="form-check-label" for="selectAllStudents">เลือกทั้งหมด</label>
+          </div>
+          <div id="studentListForBatch" class="border p-2" style="max-height: 300px; overflow-y: auto;">
+            <!-- Student checkboxes will be loaded here -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" onclick="submitBatchAttendance()">บันทึกการเข้าร่วม</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
-  function initCalendar() {
-    const calendarEl = document.getElementById('calendar');
-    const calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
-      locale: 'th',
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,listMonth'
-      },
-      events: function(fetchInfo, successCallback, failureCallback) {
-        google.script.run.withSuccessHandler(res => {
-          if(res.success) {
-            const events = res.data.map(act => ({
-              id: act.actId,
-              title: act.name,
-              start: act.date,
-              extendedProps: {
-                location: act.location,
-                type: act.type
-              }
-            }));
-            successCallback(events);
-          }
-        }).getActivities();
-      },
-      eventClick: function(info) {
-        alert('กิจกรรม: ' + info.event.title + '\nสถานที่: ' + info.event.extendedProps.location);
-      }
-    });
-    calendar.render();
+  let activities = [];
+  let filteredActivities = [];
+  const actModal = new bootstrap.Modal(document.getElementById('activityModal'));
+  const batchAttendanceModal = new bootstrap.Modal(document.getElementById('batchAttendanceModal'));
+  let studentsForBatchAttendance = []; // เก็บข้อมูลนักเรียนสำหรับ Batch Attendance
+
+  function loadActivities() {
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        activities = res.data;
+        filteredActivities = [...activities];
+        renderTable();
+      } else { alert(res.message); }
+    }).getActivities();
   }
 
-  // เรียกใช้งานเมื่อโหลดไฟล์สำเร็จ
-  setTimeout(initCalendar, 100);
+  function filterActivities() {
+    const term = document.getElementById('searchAct').value.toLowerCase();
+    filteredActivities = activities.filter(act => 
+      act.name.toLowerCase().includes(term) || 
+      act.location.toLowerCase().includes(term) ||
+      act.actId.toLowerCase().includes(term)
+    );
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('activityTableBody');
+    if (filteredActivities.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">ไม่พบข้อมูลกิจกรรม</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filteredActivities.map(act => `
+      <tr>
+        <td><div class="fw-bold">${act.name}</div><small class="text-muted">${act.actId}</small></td>
+        <td>${new Date(act.date).toLocaleDateString('th-TH')}</td>
+        <td>${act.location}</td>
+        <td>${act.academicYear}/${act.semester}</td>
+        <td><span class="badge bg-info text-dark">${act.type}</span></td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary" onclick="openActivityModal('${act.actId}')">
+            <i class="fa fa-edit"></i> แก้ไข
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function openActivityModal(id = null) {
+    document.getElementById('activityForm').reset();
+    document.getElementById('actId').value = '';
+    if (id) {
+      const act = activities.find(a => a.actId === id);
+      document.getElementById('actId').value = act.actId;
+      document.getElementById('actName').value = act.name;
+      document.getElementById('actDate').value = new Date(act.date).toISOString().split('T')[0];
+      document.getElementById('actLocation').value = act.location;
+      document.getElementById('actYear').value = act.academicYear;
+      document.getElementById('actSemester').value = act.semester;
+      document.getElementById('actType').value = act.type;
+      document.getElementById('actPoints').value = act.points || 0;
+    }
+    actModal.show();
+  }
+
+  function submitActivity() {
+    const data = {
+      actId: document.getElementById('actId').value,
+      name: document.getElementById('actName').value,
+      date: document.getElementById('actDate').value,
+      location: document.getElementById('actLocation').value,
+      academicYear: document.getElementById('actYear').value,
+      semester: document.getElementById('actSemester').value,
+      type: document.getElementById('actType').value,
+      points: document.getElementById('actPoints').value
+    };
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      actModal.hide();
+      loadActivities();
+    }).saveActivity(data);
+  }
+
+  function openBatchAttendanceModal() {
+    const selectAct = document.getElementById('batchActId');
+    selectAct.innerHTML = '<option value="">-- เลือกกิจกรรม --</option>' + 
+      activities.map(a => `<option value="${a.actId}">${a.name} (${a.academicYear}/${a.semester})</option>`).join('');
+    document.getElementById('studentListForBatch').innerHTML = '<div class="text-center text-muted">กรุณาเลือกกิจกรรมก่อน</div>';
+    document.getElementById('selectAllStudents').checked = false;
+    batchAttendanceModal.show();
+  }
+
+  function loadStudentsForBatchAttendance() {
+    const actId = document.getElementById('batchActId').value;
+    if (!actId) {
+      document.getElementById('studentListForBatch').innerHTML = '<div class="text-center text-muted">กรุณาเลือกกิจกรรมก่อน</div>';
+      return;
+    }
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if (res.success) {
+        studentsForBatchAttendance = res.data;
+        const studentListDiv = document.getElementById('studentListForBatch');
+        if (studentsForBatchAttendance.length === 0) {
+          studentListDiv.innerHTML = '<div class="text-center text-muted">ไม่พบนักเรียนที่ยังไม่เข้าร่วมกิจกรรมนี้</div>';
+          document.getElementById('selectAllStudents').disabled = true;
+        } else {
+          studentListDiv.innerHTML = studentsForBatchAttendance.map(s => `
+            <div class="form-check">
+              <input class="form-check-input student-batch-checkbox" type="checkbox" value="${s.userId}" id="batchStudent_${s.userId}">
+              <label class="form-check-label" for="batchStudent_${s.userId}">${s.name} (${s.department || 'ไม่ระบุ'})</label>
+            </div>
+          `).join('');
+          document.getElementById('selectAllStudents').disabled = false;
+        }
+      } else {
+        alert('เกิดข้อผิดพลาดในการโหลดนักเรียน: ' + res.message);
+      }
+    }).getStudentsNeedingRemediation(actId);
+  }
+
+  function toggleSelectAllStudents(masterCheckbox) {
+    const checkboxes = document.querySelectorAll('.student-batch-checkbox');
+    checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+  }
+
+  function submitBatchAttendance() {
+    const actId = document.getElementById('batchActId').value;
+    if (!actId) return alert('กรุณาเลือกกิจกรรม');
+
+    const selectedStudentIds = Array.from(document.querySelectorAll('.student-batch-checkbox:checked'))
+                                  .map(cb => cb.value);
+
+    if (selectedStudentIds.length === 0) return alert('กรุณาเลือกนักเรียนอย่างน้อย 1 คน');
+
+    if (!confirm(`คุณต้องการบันทึกการเข้าร่วมกิจกรรมนี้ให้กับนักเรียน ${selectedStudentIds.length} คน ใช่หรือไม่?`)) {
+      return;
+    }
+
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      alert(res.message);
+      if (res.success) {
+        batchAttendanceModal.hide();
+        loadActivities(); // รีโหลดตารางกิจกรรม
+      }
+    }).recordBatchAttendance(actId, selectedStudentIds, 'BATCH_MANUAL');
+  }
+
+  loadActivities();
 </script>

@@ -1,0 +1,388 @@
+<!-- report_summary.html -->
+<style>
+  @media print {
+    body * { visibility: hidden; }
+    #reportContainer, #reportContainer * { visibility: visible; }
+    #reportContainer { position: absolute; left: 0; top: 0; width: 100%; }
+    .no-print { display: none !important; }
+  }
+</style>
+<!-- SheetJS สำหรับ Export Excel -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+<div class="card shadow-sm no-print">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-file-alt"></i> รายงานสรุปการเข้าร่วมกิจกรรม</h5>
+    <div class="d-flex gap-1">
+      <select id="reportType" class="form-select form-select-sm" onchange="generateReport()">
+        <option value="byStudent">สรุปการเข้าร่วมรายบุคคล</option>
+        <option value="byDepartment">สรุปการเข้าร่วมรายแผนก</option>
+        <option value="passFail">ผลการประเมินกิจกรรม (ผ่าน/ตก)</option>
+      </select>
+      <button class="btn btn-outline-primary btn-sm" onclick="loadPage('REPORT_TEMPLATES')">
+        <i class="fa fa-edit"></i> ปรับแต่งแบบฟอร์ม
+      </button>
+      <div class="dropdown">
+        <button class="btn btn-success btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          <i class="fa fa-download"></i> ส่งออก
+        </button>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="#" onclick="exportToExcel()"><i class="fa fa-file-excel text-success"></i> Excel (.xlsx)</a></li>
+          <li><a class="dropdown-item" href="#" onclick="window.print()"><i class="fa fa-file-pdf text-danger"></i> PDF (Print)</a></li>
+        </ul>
+      </div>
+      <select id="selectTemplate" class="form-select form-select-sm" style="width: 150px;" onchange="applyTemplate()">
+        <option value="">แม่แบบมาตรฐาน</option>
+      </select>
+    </div>
+  </div>
+  <div class="card-body">
+    <div id="reportContainer">
+      <h6 class="text-center mb-3">รายงานสรุปการเข้าร่วมกิจกรรม <span id="reportTitle"></span></h6>
+      <div class="mb-2 no-print">
+        <small class="text-muted"><i class="fa fa-info-circle"></i> เลือกข้อมูลที่ต้องการก่อนสั่งพิมพ์หรือส่งออก</small>
+      </div>
+      <div class="table-responsive" id="reportTableWrapper">
+        <table class="table table-bordered table-hover align-middle">
+          <thead class="table-light" id="reportHeader">
+            <!-- Headers will be rendered here -->
+          </thead>
+          <tbody id="reportBody">
+            <tr><td colspan="5" class="text-center">กรุณาเลือกประเภทรายงาน</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let rawReportData = { users: [], activities: [], attendance: [], remediation: [], settings: {}, templates: [] };
+  let currentReportData = []; // เก็บชุดข้อมูลล่าสุดที่สร้างขึ้นสำหรับใช้งานร่วมกับแม่แบบรายงาน
+
+  function loadRawReportData() {
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if (res.success) {
+        // แปลงข้อมูลดิบจาก Array of Arrays เป็น Array of Objects เพื่อให้จัดการง่ายขึ้น
+        rawReportData.users = convertSheetDataToObject(res.users);
+        rawReportData.activities = convertSheetDataToObject(res.activities);
+        rawReportData.attendance = convertSheetDataToObject(res.attendance);
+        rawReportData.remediation = res.remediation;
+        rawReportData.settings = res.settings || {};
+        loadTemplates(); // โหลดแม่แบบต่อ
+        generateReport(); // สร้างรายงานเริ่มต้น
+      } else {
+        alert(res.message);
+      }
+    }).getRawReportData();
+  }
+
+  function loadTemplates() {
+    google.script.run.withSuccessHandler(res => {
+      if(res.success) {
+        rawReportData.templates = res.data;
+        const sel = document.getElementById('selectTemplate');
+        sel.innerHTML += res.data.map(t => `<option value="${t.TemplateID}">${t.TemplateName}</option>`).join('');
+      }
+    }).getReportTemplates();
+  }
+
+  function convertSheetDataToObject(sheetData) {
+    if (!sheetData || sheetData.length < 2) return [];
+    const headers = sheetData[0];
+    return sheetData.slice(1).map(row => {
+      let obj = {};
+      headers.forEach((header, index) => {
+        obj[header] = row[index];
+      });
+      return obj;
+    });
+  }
+
+  function applyTemplate() {
+    const tid = document.getElementById('selectTemplate').value;
+    
+    if(!tid) {
+      generateReport(); // หากไม่เลือกแม่แบบ ให้กลับไปแสดงผลตารางมาตรฐาน
+      return;
+    }
+
+    const t = rawReportData.templates.find(x => x.TemplateID === tid);
+    if(t) {
+      // ดึงข้อมูลเฉพาะรายการที่ผู้ใช้ติ๊กเลือกใน Checkbox
+      const checkboxes = document.querySelectorAll('.row-select');
+      const selectedData = [];
+      checkboxes.forEach((cb, index) => {
+        if (cb.checked) {
+          selectedData.push(currentReportData[index]);
+        }
+      });
+
+      // หากไม่มีการเลือกรายการใดเลย ให้ถือว่าเลือกทั้งหมดที่มีในรายงานขณะนั้น
+      const dataToRender = selectedData.length > 0 ? selectedData : currentReportData;
+      renderReportTable([], dataToRender, document.getElementById('reportType').value, t);
+    }
+  }
+
+  // ฟังก์ชันสำหรับแทนที่ Placeholder ใน HTML
+  function replacePlaceholders(htmlString, globalData, itemData) {
+    let result = htmlString;
+
+    // สร้าง Context Object สำหรับการแทนที่
+    const context = {
+      report: {
+        title: document.getElementById('reportTitle').innerText,
+        date: new Date().toLocaleDateString('th-TH'),
+        type: document.getElementById('reportType').value
+      },
+      currentUser: currentUser,
+      settings: globalData.settings,
+      item: itemData // ข้อมูลรายแถว (ถ้ามี)
+    };
+
+    // แทนที่ Placeholder ทั่วไป
+    // ตัวอย่าง: {{report.title}}, {{currentUser.name}}, {{settings.PASS_PERCENTAGE}}
+    for (const key in context) {
+      if (typeof context[key] === 'object' && context[key] !== null) {
+        for (const subKey in context[key]) {
+          const placeholder = new RegExp(`{{${key}.${subKey}}}`, 'g');
+          result = result.replace(placeholder, context[key][subKey] || '');
+        }
+      } else {
+        const placeholder = new RegExp(`{{${key}}}`, 'g');
+        result = result.replace(placeholder, context[key] || '');
+      }
+    }
+
+    // แทนที่ Placeholder สำหรับข้อมูลใน itemData (ถ้ามี)
+    if (itemData) {
+      for (const key in itemData) {
+        const placeholder = new RegExp(`{{${key}}}`, 'g');
+        result = result.replace(placeholder, itemData[key] || '');
+      }
+    }
+
+    return result;
+  }
+
+  function generateReport() {
+    const reportType = document.getElementById('reportType').value;
+    document.getElementById('selectTemplate').value = ""; // รีเซ็ตการเลือกแม่แบบเมื่อเปลี่ยนประเภทรายงาน
+
+    document.getElementById('reportBody').innerHTML = '<tr><td colspan="5" class="text-center">กำลังสร้างรายงาน...</td></tr>';
+
+    let reportData = [];
+    let headers = [];
+    let title = '';
+
+    if (reportType === 'byStudent') {
+      title = 'สรุปการเข้าร่วมกิจกรรมรายบุคคล';
+      headers = ['<input type="checkbox" id="selectAllRows" onchange="toggleSelectAll(this)">', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', 'สาขาวิชา', 'จำนวนกิจกรรมที่เข้าร่วม'];
+      
+      const studentAttendance = {}; // { studentId: count }
+      rawReportData.attendance.forEach(att => {
+        studentAttendance[att.studentId] = (studentAttendance[att.studentId] || 0) + 1;
+      });
+
+      reportData = rawReportData.users.map(user => ({
+        userId: user.userId,
+        name: user.name,
+        department: user.department,
+        activityCount: studentAttendance[user.userId] || 0
+      }));
+
+      reportData.sort((a, b) => b.activityCount - a.activityCount); // เรียงตามจำนวนกิจกรรม
+
+    } else if (reportType === 'byDepartment') {
+      title = 'สรุปการเข้าร่วมกิจกรรมรายห้อง/สาขา';
+      headers = ['สาขาวิชา', 'จำนวนนักเรียน', 'จำนวนกิจกรรมทั้งหมด', 'เฉลี่ยการเข้าร่วม/คน'];
+
+      const departmentStats = {}; // { department: { totalStudents, totalActivities } }
+      rawReportData.users.forEach(user => {
+        if (user.department) {
+          departmentStats[user.department] = departmentStats[user.department] || { totalStudents: 0, totalActivities: 0 };
+          departmentStats[user.department].totalStudents++;
+        }
+      });
+
+      rawReportData.attendance.forEach(att => {
+        const student = rawReportData.users.find(u => u.userId === att.studentId);
+        if (student && student.department) {
+          departmentStats[student.department].totalActivities++;
+        }
+      });
+
+      reportData = Object.keys(departmentStats).map(dept => ({
+        department: dept,
+        totalStudents: departmentStats[dept].totalStudents,
+        totalActivities: departmentStats[dept].totalActivities,
+        avgAttendance: (departmentStats[dept].totalActivities / departmentStats[dept].totalStudents).toFixed(2)
+      }));
+
+      reportData.sort((a, b) => b.avgAttendance - a.avgAttendance);
+    } else if (reportType === 'passFail') {
+      const threshold = parseFloat(rawReportData.settings['PASS_PERCENTAGE']) || 80;
+      title = `สรุปผลการผ่านกิจกรรม (เกณฑ์ ${threshold}%)`;
+      headers = ['<input type="checkbox" id="selectAllRows" onchange="toggleSelectAll(this)">', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', 'กิจกรรมที่เข้า', 'เปอร์เซ็นต์', 'สถานะ'];
+      
+      // หาเทอมปัจจุบัน
+      let latestYear = 0, latestSem = 0;
+      rawReportData.activities.forEach(r => {
+        const y = parseInt(r.academicYear); const s = parseInt(r.semester);
+        if (y > latestYear) { latestYear = y; latestSem = s; }
+        else if (y === latestYear && s > latestSem) { latestSem = s; }
+      });
+      const termActs = rawReportData.activities.filter(a => a.academicYear == latestYear && a.semester == latestSem);
+      const total = termActs.length;
+      const actIds = termActs.map(a => a.actId);
+
+      const remediationData = convertSheetDataToObject(rawReportData.remediation);
+
+      reportData = rawReportData.users.filter(u => u.role === 'STUDENT').map(user => {
+        const attended = rawReportData.attendance.filter(att => att.studentId == user.userId && actIds.includes(att.actId)).length;
+        const rem = remediationData.filter(r => r.studentId == user.userId && actIds.includes(r.actId) && r.status === 'COMPLETED').length;
+        const subtotal = attended + rem;
+        const percent = total > 0 ? (subtotal / total) * 100 : 0;
+        return {
+          userId: user.userId, name: user.name,
+          count: `${subtotal}/${total}`,
+          percent: percent.toFixed(2) + '%',
+          status: percent >= threshold ? 'ผ่าน' : 'ไม่ผ่าน'
+        };
+      });
+    }
+
+    currentReportData = reportData; // บันทึกข้อมูลที่สร้างล่าสุดลงตัวแปร Global
+    document.getElementById('reportTitle').innerText = title;
+    renderReportTable(headers, reportData, reportType);
+  }
+
+  function renderReportTable(headers, data, reportType, template = null) {
+    const container = document.getElementById('reportContainer');
+    const tableWrapper = document.getElementById('reportTableWrapper');
+    const titleH6 = container.querySelector('h6');
+
+    if (template) {
+      // โหมดแสดงผลแบบแม่แบบรายงาน (Template Mode)
+      titleH6.classList.add('no-print');
+      let bodyHtml = '';
+      data.forEach(item => {
+        // วนลูปสร้างเนื้อหาจาก BodyHtml ของแม่แบบสำหรับข้อมูลทุกแถว
+        bodyHtml += replacePlaceholders(template.BodyHtml, rawReportData, item);
+      });
+
+      tableWrapper.innerHTML = `
+        <style>${template.CustomCss}</style>
+        <div class="report-template-view">
+          <div class="report-header">${replacePlaceholders(template.HeaderHtml, rawReportData)}</div>
+          <div class="report-body">${bodyHtml}</div>
+          <div class="report-footer">${replacePlaceholders(template.FooterHtml, rawReportData)}</div>
+        </div>
+      `;
+      return;
+    }
+
+    // โหมดแสดงผลแบบตารางมาตรฐาน (Standard Table Mode)
+    titleH6.classList.remove('no-print');
+    tableWrapper.innerHTML = `
+      <table class="table table-bordered table-hover align-middle">
+        <thead class="table-light" id="reportHeader"></thead>
+        <tbody id="reportBody"></tbody>
+      </table>
+    `;
+    
+    const headerRow = document.getElementById('reportHeader');
+    const tbody = document.getElementById('reportBody');
+
+    headerRow.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="' + headers.length + '" class="text-center">ไม่พบข้อมูลสำหรับรายงานนี้</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.map(item => {
+      let rowHtml = '<tr>';
+      if (reportType === 'byStudent') {
+        rowHtml += `<td class="text-center"><input type="checkbox" class="row-select" data-id="${item.userId}"></td>`;
+        rowHtml += `<td>${item.userId}</td>`;
+        rowHtml += `<td>${item.name}</td>`;
+        rowHtml += `<td>${item.department || '-'}</td>`;
+        rowHtml += `<td>${item.activityCount}</td>`;
+      } else if (reportType === 'byDepartment') {
+        // แผนกไม่ใส่ checkbox เพราะเป็นการสรุปยอด
+        rowHtml += `<td>${item.department}</td>`;
+        rowHtml += `<td>${item.totalStudents}</td>`;
+        rowHtml += `<td>${item.totalActivities}</td>`;
+        rowHtml += `<td>${item.avgAttendance}</td>`;
+      } else if (reportType === 'passFail') {
+        rowHtml += `<td class="text-center"><input type="checkbox" class="row-select" data-id="${item.userId}"></td>`;
+        rowHtml += `<td>${item.userId}</td>`;
+        rowHtml += `<td>${item.name}</td>`;
+        rowHtml += `<td>${item.count}</td>`;
+        rowHtml += `<td>${item.percent}</td>`;
+        rowHtml += `<td class="fw-bold ${item.status === 'ผ่าน' ? 'text-success' : 'text-danger'}">${item.status}</td>`;
+      }
+      rowHtml += '</tr>';
+      return rowHtml;
+    }).join('');
+  }
+
+  function toggleSelectAll(master) {
+    const checkboxes = document.querySelectorAll('.row-select');
+    checkboxes.forEach(cb => cb.checked = master.checked);
+  }
+
+  function exportToExcel() {
+    const selectedCheckboxes = document.querySelectorAll('.row-select:checked');
+    let targetTable;
+
+    if (selectedCheckboxes.length > 0) {
+      // สร้างตารางชั่วคราวที่มีเฉพาะแถวที่เลือก
+      const originalTable = document.querySelector("#reportTableWrapper table");
+      targetTable = originalTable.cloneNode(true);
+      const rows = targetTable.querySelectorAll('tbody tr');
+      
+      // กรองออกเฉพาะที่ไม่ได้เลือก
+      rows.forEach((row, index) => {
+        const cb = originalTable.querySelectorAll('.row-select')[index];
+        if (cb && !cb.checked) row.remove();
+      });
+      // ลบคอลัมน์ checkbox ออกจากการส่งออก
+      targetTable.querySelectorAll('tr').forEach(tr => tr.deleteCell(0));
+    } else {
+      targetTable = document.querySelector("#reportTableWrapper table");
+    }
+
+    const wb = XLSX.utils.table_to_book(targetTable, { sheet: "Report" });
+    const reportName = document.getElementById('reportType').value + "_" + new Date().getTime();
+    XLSX.writeFile(wb, `Report_${reportName}.xlsx`);
+  }
+  
+  function showStudentHistory(userId) {
+    const stats = studentStats[userId];
+    document.getElementById('historyStudentName').innerText = stats.name;
+    document.getElementById('historyStudentId').innerText = 'รหัส: ' + userId;
+    
+    const tbody = document.getElementById('historyBody');
+    if (stats.history.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center">ไม่มีประวัติคะแนน</td></tr>';
+    } else {
+      tbody.innerHTML = stats.history.map(h => `
+        <tr>
+          <td>${h.name}</td>
+          <td><span class="badge bg-light text-dark">${h.type}</span></td>
+          <td class="text-success fw-bold">+${h.points}</td>
+          <td><small>${h.time}</small></td>
+          <td><small>${h.by}</small></td>
+        </tr>
+      `).join('');
+    }
+    historyModal.show();
+  }
+
+  // โหลดข้อมูลเมื่อเปิดหน้า
+  loadRawReportData();
+</script>

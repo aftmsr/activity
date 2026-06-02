@@ -1,0 +1,121 @@
+<div class="card shadow-sm">
+  <div class="card-header bg-white">
+    <h5 class="mb-0 text-primary"><i class="fa fa-cogs"></i> ตั้งค่าระบบ</h5>
+  </div>
+  <div class="card-body">
+    <form id="settingsForm">
+      <div class="row">
+        <div class="col-md-6 mb-4">
+          <label class="form-label fw-bold">ขีดจำกัดขนาดไฟล์ PDF (MB)</label>
+          <div class="input-group">
+            <input type="number" id="MAX_PDF_SIZE" class="form-control" min="1" max="100">
+            <span class="input-group-text">MB</span>
+          </div>
+          <small class="text-muted">ไฟล์ที่ขนาดเกินนี้จะถูกปฏิเสธการอัปโหลด</small>
+        </div>
+        <div class="col-md-6 mb-4">
+          <label class="form-label fw-bold">ขีดจำกัดขนาดรูปภาพ (MB)</label>
+          <div class="input-group">
+            <input type="number" id="MAX_IMG_SIZE" class="form-control" min="1" max="50">
+            <span class="input-group-text">MB</span>
+          </div>
+          <small class="text-muted">รูปภาพจะถูกบีบอัดหากเกินขนาดที่กำหนด</small>
+        </div>
+        <div class="col-md-6 mb-4">
+          <label class="form-label fw-bold">เกณฑ์เปอร์เซ็นต์การผ่านกิจกรรม (%)</label>
+          <div class="input-group">
+            <input type="number" id="PASS_PERCENTAGE" class="form-control" min="0" max="100">
+            <span class="input-group-text">%</span>
+          </div>
+          <small class="text-muted">เปอร์เซ็นต์การเข้าร่วมกิจกรรมขั้นต่ำที่ถือว่า "ผ่าน"</small>
+        </div>
+      </div>
+
+      <div class="card bg-light border-0 mb-4">
+        <div class="card-body">
+          <h6 class="fw-bold text-success"><i class="fab fa-line"></i> การตั้งค่า LINE Messaging API (LINE OA)</h6>
+          <p class="small text-muted mb-3">ใช้สำหรับส่งแจ้งเตือนเข้ากลุ่มแทน LINE Notify ที่เลิกใช้ไป</p>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Channel Access Token</label>
+            <input type="text" id="LINE_CHANNEL_ACCESS_TOKEN" class="form-control form-control-sm" placeholder="ใส่ Token จาก LINE Developers Console">
+          </div>
+          <div class="row">
+            <div class="col-md-8 mb-2">
+              <label class="form-label small fw-bold">Target ID (Group ID / User ID)</label>
+              <input type="text" id="LINE_TARGET_ID" class="form-control form-control-sm" placeholder="ID กลุ่มที่ต้องการส่งแจ้งเตือน">
+            </div>
+            <div class="col-md-4 mb-2 d-flex flex-column justify-content-end">
+              <small class="text-info" style="font-size: 0.75rem;">
+                💡 วิธีหา ID: เชิญบอทเข้ากลุ่มแล้วพิมพ์ <b>!getID</b> จากนั้นมาดูที่หน้า "ประวัติการใช้งาน"
+              </small>
+              <button type="button" class="btn btn-outline-info btn-sm mt-2" onclick="testLineConnection()">
+                <i class="fab fa-line"></i> ทดสอบการเชื่อมต่อ
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <hr>
+      
+      <div class="text-end">
+        <button type="button" class="btn btn-primary" onclick="updateSettings()">
+          <i class="fa fa-save"></i> บันทึกการตั้งค่า
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function loadSettings() {
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if (res.success) {
+        Object.keys(res.settings).forEach(key => {
+          const el = document.getElementById(key);
+          if (el) el.value = res.settings[key];
+        });
+      }
+    }).getSettings();
+  }
+
+  function updateSettings() {
+    const settings = {
+      MAX_PDF_SIZE: document.getElementById('MAX_PDF_SIZE').value,
+      MAX_IMG_SIZE: document.getElementById('MAX_IMG_SIZE').value,
+      PASS_PERCENTAGE: document.getElementById('PASS_PERCENTAGE').value,
+      LINE_CHANNEL_ACCESS_TOKEN: document.getElementById('LINE_CHANNEL_ACCESS_TOKEN').value,
+      LINE_TARGET_ID: document.getElementById('LINE_TARGET_ID').value
+    }; // เพิ่ม PASS_PERCENTAGE
+
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if (res.success) {
+        alert(res.message);
+      } else {
+        alert('เกิดข้อผิดพลาด: ' + res.message);
+      }
+    }).saveSettings(settings);
+  }
+
+  function testLineConnection() {
+    const token = document.getElementById('LINE_CHANNEL_ACCESS_TOKEN').value;
+    const targetId = document.getElementById('LINE_TARGET_ID').value;
+
+    if (!token || !targetId) {
+      alert('กรุณากรอก Channel Access Token และ Target ID ให้ครบถ้วน');
+      return;
+    }
+
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      alert(res.message);
+    }).testLineNotification(token, targetId);
+  }
+
+  loadSettings();
+</script>

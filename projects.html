@@ -1,0 +1,136 @@
+<div class="card shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-tasks"></i> แผนงานโครงการและชมรม</h5>
+    <button class="btn btn-primary btn-sm" onclick="openProjectModal()">
+      <i class="fa fa-plus"></i> เพิ่มโครงการ/ชมรม
+    </button>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>ชื่อโครงการ/ชมรม</th>
+            <th>ปี/ภาคเรียน</th>
+            <th>งบประมาณ</th>
+            <th>สถานะ</th>
+            <th>หลักฐาน</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="projectTableBody">
+          <tr><td colspan="6" class="text-center">กำลังโหลดข้อมูล...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="projectModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">รายละเอียดโครงการ</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="projectForm">
+          <input type="hidden" id="projectId">
+          <div class="row">
+            <div class="col-md-8 mb-3">
+              <label class="form-label">ชื่อโครงการ/ชื่อชมรม</label>
+              <input type="text" id="pName" class="form-control" required>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">สถานะ</label>
+              <select id="pStatus" class="form-select">
+                <option value="รอดำเนินการ">รอดำเนินการ</option>
+                <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                <option value="ยกเลิก">ยกเลิก</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label">ปีการศึกษา</label>
+              <input type="number" id="pYear" class="form-control" value="2567">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">ภาคเรียน</label>
+              <select id="pSemester" class="form-select">
+                <option value="1">1</option>
+                <option value="2">2</option>
+              </select>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">งบประมาณ (บาท)</label>
+              <input type="number" id="pBudget" class="form-control" placeholder="0.00">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">กลุ่มเป้าหมาย/ขอบเขต</label>
+            <input type="text" id="pScope" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">ไฟล์แนบ (PDF ไม่เกิน 30MB / รูปไม่เกิน 3MB)</label>
+            <input type="file" id="pFile" class="form-control" onchange="checkFileSize(this)">
+            <input type="hidden" id="pFileUrl">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="submitProject()">บันทึกข้อมูล</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function checkFileSize(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        const maxPdf = parseInt(res.settings.MAX_PDF_SIZE) || 30;
+        const maxImg = parseInt(res.settings.MAX_IMG_SIZE) || 3;
+        const sizeMB = file.size / (1024 * 1024);
+
+        if (file.type === 'application/pdf' && sizeMB > maxPdf) {
+          alert(`ไฟล์ PDF ใหญ่เกินไป (สูงสุด ${maxPdf}MB) กรุณาบีบอัดไฟล์ก่อนอัปโหลด`);
+          input.value = '';
+        } else if (file.type.startsWith('image/') && sizeMB > maxImg) {
+          alert(`รูปภาพใหญ่เกินไป (สูงสุด ${maxImg}MB) กรุณาใช้รูปที่มีขนาดเล็กลง`);
+          input.value = '';
+        }
+      }
+    }).getSettings();
+  }
+
+  function loadProjects() {
+    google.script.run.withSuccessHandler(res => {
+      const tbody = document.getElementById('projectTableBody');
+      if (res.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">ไม่พบข้อมูล</td></tr>';
+        return;
+      }
+      tbody.innerHTML = res.data.map(p => `
+        <tr>
+          <td>${p[1]}</td>
+          <td>${p[2]}/${p[3]}</td>
+          <td>${Number(p[4]).toLocaleString()}</td>
+          <td><span class="badge ${p[7] === 'เสร็จสิ้น' ? 'bg-success' : 'bg-warning'}">${p[7]}</span></td>
+          <td>${p[8] ? `<a href="${p[8]}" target="_blank" class="btn btn-xs btn-link">ดูหลักฐาน</a>` : '-'}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary" onclick="editProject('${p[0]}')"><i class="fa fa-edit"></i></button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteProject('${p[0]}')"><i class="fa fa-trash"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    }).getProjectList();
+  }
+
+  // ... โค้ด submitProject และส่วนอัปโหลดไฟล์ (ข้ามเพื่อความกระชับ) ...
+  loadProjects();
+</script>

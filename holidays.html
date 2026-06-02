@@ -1,0 +1,157 @@
+<!-- holidays.html -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-umbrella-beach"></i> จัดการวันหยุด</h5>
+    <button class="btn btn-primary" onclick="openHolidayModal()">
+      <i class="fa fa-plus-circle"></i> เพิ่มวันหยุดใหม่
+    </button>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>วันที่</th>
+            <th>รายละเอียด</th>
+            <th>ผู้บันทึก</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="holidayTableBody">
+          <tr><td colspan="4" class="text-center">กำลังโหลดข้อมูล...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal แบบฟอร์มวันหยุด -->
+<div class="modal fade" id="holidayModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="holidayModalTitle">เพิ่ม/แก้ไขวันหยุด</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="holidayForm">
+          <input type="hidden" id="holidayId">
+          <div class="mb-3">
+            <label for="holidayDate" class="form-label">วันที่</label>
+            <input type="date" id="holidayDate" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label for="holidayDescription" class="form-label">รายละเอียด</label>
+            <input type="text" id="holidayDescription" class="form-control" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" onclick="submitHoliday()">บันทึกข้อมูล</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let holidays = [];
+  const holidayModal = new bootstrap.Modal(document.getElementById('holidayModal'));
+
+  function loadHolidays() {
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        holidays = res.data;
+        renderHolidayTable();
+      } else { alert(res.message); }
+    }).getHolidays();
+  }
+
+  function renderHolidayTable() {
+    const tbody = document.getElementById('holidayTableBody');
+    if (holidays.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center">ไม่พบข้อมูลวันหยุด</td></tr>';
+      return;
+    }
+    tbody.innerHTML = holidays.map(h => `
+      <tr>
+        <td>${new Date(h.date).toLocaleDateString('th-TH')}</td>
+        <td>${h.description}</td>
+        <td>${h.createdBy}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary me-1" onclick="openHolidayModal('${h.holidayId}')">
+            <i class="fa fa-edit"></i> แก้ไข
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteHoliday('${h.holidayId}')">
+            <i class="fa fa-trash-alt"></i> ลบ
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function openHolidayModal(id = null) {
+    document.getElementById('holidayForm').reset();
+    document.getElementById('holidayId').value = '';
+    document.getElementById('holidayModalTitle').innerText = 'เพิ่มวันหยุดใหม่';
+
+    if (id) {
+      const holiday = holidays.find(h => h.holidayId === id);
+      if (holiday) {
+        document.getElementById('holidayId').value = holiday.holidayId;
+        document.getElementById('holidayDate').value = holiday.date;
+        document.getElementById('holidayDescription').value = holiday.description;
+        document.getElementById('holidayModalTitle').innerText = 'แก้ไขวันหยุด';
+      }
+    }
+    holidayModal.show();
+  }
+
+  function submitHoliday() {
+    const holidayData = {
+      holidayId: document.getElementById('holidayId').value,
+      date: document.getElementById('holidayDate').value,
+      description: document.getElementById('holidayDescription').value
+    };
+
+    if (!holidayData.date || !holidayData.description) {
+      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+      return;
+    }
+
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      alert(res.message);
+      holidayModal.hide();
+      loadHolidays();
+    }).saveHoliday(holidayData);
+  }
+
+  function deleteHoliday(id) {
+    if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการลบวันหยุดนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้')) {
+      return;
+    }
+    // TODO: เพิ่มการยืนยันรหัสผ่านของ Admin/Staff
+    // สำหรับตอนนี้จะเรียกฟังก์ชัน deleteHoliday โดยตรง
+    // ในอนาคต: อาจจะต้องมี Modal ให้กรอกรหัสผ่านก่อนเรียก google.script.run.confirmPassword(currentUser.email, password)
+    // แล้วค่อยเรียก deleteHoliday(id) หากรหัสผ่านถูกต้อง
+
+    // จำลองการยืนยันรหัสผ่าน (ในระบบจริงต้องมี UI ให้กรอก)
+    const password = prompt("กรุณากรอกรหัสผ่านของคุณเพื่อยืนยันการลบ:");
+    if (!password) return; // ผู้ใช้กดยกเลิก
+
+      showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if (res.success) {
+        alert(res.message);
+        loadHolidays();
+      } else {
+        alert('เกิดข้อผิดพลาดในการลบ: ' + res.message);
+      }
+    }).deleteHoliday(id, password); // ส่งรหัสผ่านไปยืนยัน
+  }
+
+  loadHolidays();
+</script>

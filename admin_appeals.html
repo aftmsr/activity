@@ -1,0 +1,110 @@
+<div class="card shadow-sm">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-check-circle me-2"></i> จัดการรายการอุทธรณ์</h5>
+    <span class="badge bg-warning text-dark" id="pendingCount">0 รายการค้างตรวจสอบ</span>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>นักเรียน</th>
+            <th>กิจกรรม</th>
+            <th>หลักฐาน</th>
+            <th>วันที่ยื่น</th>
+            <th class="text-center">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="appealsTableBody">
+          <tr><td colspan="5" class="text-center py-4">กำลังโหลดข้อมูล...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Student Profile -->
+<div class="modal fade" id="profileModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">ข้อมูลนักเรียน</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center p-4" id="profileDetail"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let pendingList = [];
+  const profModal = new bootstrap.Modal(document.getElementById('profileModal'));
+
+  function loadAppeals() {
+    google.script.run.withSuccessHandler(res => {
+      if(res.success) {
+        pendingList = res.data;
+        document.getElementById('pendingCount').innerText = `${pendingList.length} รายการค้างตรวจสอบ`;
+        renderAppeals();
+      }
+    }).getPendingAppeals();
+  }
+
+  function renderAppeals() {
+    const tbody = document.getElementById('appealsTableBody');
+    if(pendingList.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">ไม่มีรายการค้างตรวจสอบ</td></tr>';
+      return;
+    }
+    tbody.innerHTML = pendingList.map(a => `
+      <tr>
+        <td>
+          <a href="#" onclick="viewProfile('${a.studentId}')" class="fw-bold text-decoration-none">${a.studentName}</a>
+          <div class="small text-muted">${a.dept}</div>
+        </td>
+        <td>${a.actName}</td>
+        <td>
+          <div class="small text-truncate" style="max-width: 150px;">${a.notes}</div>
+          ${a.evidenceUrl ? `<a href="${a.evidenceUrl}" target="_blank" class="badge bg-info text-dark text-decoration-none">เปิดหลักฐาน</a>` : ''}
+        </td>
+        <td><small>${new Date(a.updatedAt).toLocaleDateString('th-TH')}</small></td>
+        <td class="text-center">
+          <button class="btn btn-sm btn-success" onclick="updateStatus('${a.id}', 'COMPLETED')">อนุมัติ</button>
+          <button class="btn btn-sm btn-danger" onclick="updateStatus('${a.id}', 'REJECTED')">ปฏิเสธ</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function viewProfile(id) {
+    const appeal = pendingList.find(x => x.studentId == id);
+    const p = appeal.studentProfile;
+    document.getElementById('profileDetail').innerHTML = `
+      <i class="fa fa-user-circle fa-5x text-secondary mb-3"></i>
+      <h4>${p.name}</h4>
+      <p class="text-muted">ID: ${p.id}</p>
+      <div class="text-start mt-4">
+        <p><strong>แผนกวิชา:</strong> ${p.dept}</p>
+        <p><strong>อีเมล:</strong> ${p.email}</p>
+      </div>
+    `;
+    profModal.show();
+  }
+
+  function updateStatus(id, status) {
+    const comment = prompt('ระบุหมายเหตุการพิจารณา (ถ้ามี):');
+    if (comment === null) return;
+    
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if(res.success) {
+        loadAppeals();
+      } else {
+        alert(res.message);
+      }
+    }).updateAppealStatus(id, status, comment);
+  }
+
+  loadAppeals();
+</script>

@@ -10,10 +10,12 @@
 function setupDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const tables = {
-    'Users': ['userId', 'name', 'role', 'email', 'password', 'status', 'createdAt'],
-    'Activities': ['actId', 'name', 'date', 'location', 'academicYear', 'semester', 'type', 'createdBy'],
+    'Users': ['userId', 'name', 'role', 'email', 'password', 'status', 'department', 'position', 'createdAt'],
+    'Activities': ['actId', 'name', 'date', 'location', 'academicYear', 'semester', 'type', 'createdBy', 'points'],
     'Attendance': ['attId', 'studentId', 'actId', 'scanTime', 'scanBy', 'method'],
     'Appeals': ['appId', 'studentId', 'actId', 'reason', 'img1Url', 'img2Url', 'status', 'reviewBy', 'reviewNote', 'createdAt'],
+    'Remediation': ['remId', 'studentId', 'actId', 'status', 'notes', 'updatedBy', 'updatedAt'],
+    'Holidays': ['holidayId', 'date', 'description', 'createdBy'],
     'Reports_Config': ['reportId', 'name', 'filterConfig', 'template', 'createdBy', 'updatedAt'],
     'SystemLog': ['logId', 'userId', 'role', 'action', 'detail', 'timestamp']
   };
@@ -46,7 +48,8 @@ function setupDatabase() {
     const defaultAdminPass = "CHANGE_ME_IMMEDIATELY"; // ให้เปลี่ยนทันทีหลัง Setup
     // hashPassword ถูกย้ายไปอยู่ใน Code.gs แต่ยังสามารถเรียกใช้ได้เนื่องจากเป็นฟังก์ชันระดับบนสุด
     userSheet.appendRow(['ADMIN-01', 'ผู้ดูแลระบบ', 'ADMIN', defaultAdminEmail, hashPassword(defaultAdminPass), 'ACTIVE', new Date()]);
-    Logger.log(`Default Admin created: ${defaultAdminEmail} with password "${defaultAdminPass}". PLEASE CHANGE IT IMMEDIATELY!`);
+    // ⚠️ Security: ไม่ Log password แบบ plaintext
+    Logger.log(`Default Admin created: ${defaultAdminEmail}. PLEASE CHANGE THE PASSWORD IMMEDIATELY via the Members page!`);
   }
   
   return "Database Setup Completed Successfully!";

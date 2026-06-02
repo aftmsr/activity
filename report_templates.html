@@ -1,0 +1,354 @@
+<!-- เพิ่ม Libraries สำหรับจัดการไฟล์ Word และ Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-file-invoice"></i> จัดการแม่แบบรายงาน</h5>
+    <button class="btn btn-primary btn-sm" onclick="openTemplateModal()">
+      <i class="fa fa-plus"></i> เพิ่มแม่แบบใหม่
+    </button>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>ชื่อแม่แบบ</th>
+            <th>ผู้สร้าง</th>
+            <th>แก้ไขล่าสุด</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="templateTableBody">
+          <tr><td colspan="4" class="text-center">กำลังโหลดข้อมูล...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Template Modal -->
+<div class="modal fade" id="templateModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="templateModalTitle">เพิ่ม/แก้ไขแม่แบบรายงาน</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="templateForm">
+          <input type="hidden" id="templateId">
+          <div class="row">
+            <div class="col-md-8">
+              <div class="mb-3">
+                <label class="form-label">ชื่อแม่แบบ</label>
+                <input type="text" id="templateName" class="form-control" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">นำเข้าไฟล์ตัวอย่าง (Word/Excel/HTML)</label>
+                <input type="file" id="importFile" class="form-control form-control-sm" accept=".docx,.xlsx,.xls,.html,.htm" onchange="handleFileImport(this)">
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">HTML ส่วนหัว / เนื้อหา / ส่วนท้าย</label>
+                <textarea id="headerHtml" class="form-control mb-1" rows="3" placeholder="Header HTML" oninput="updatePreview()"></textarea>
+                <textarea id="bodyHtml" class="form-control mb-1" rows="6" placeholder="Body HTML (ใช้ {{placeholder}})" oninput="updatePreview()"></textarea>
+                <textarea id="footerHtml" class="form-control mb-1" rows="3" placeholder="Footer HTML" oninput="updatePreview()"></textarea>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">CSS สำหรับจัดตำแหน่งและรูปแบบ</label>
+                <textarea id="customCss" class="form-control" rows="4" placeholder="Custom CSS" oninput="updatePreview()"></textarea>
+              </div>
+            </div>
+            <div class="col-md-4 border-start">
+              <label class="form-label fw-bold">พรีวิวแบบเรียลไทม์</label>
+              <div id="livePreview" class="border p-3 bg-light" style="min-height: 400px; overflow-y: auto; font-size: 0.8rem;">
+                <!-- Live preview goes here -->
+              </div>
+              <div class="mt-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-bold mb-0">ฟิลด์ข้อมูลที่ใช้ได้ (คลิกเพื่อคัดลอก)</label>
+                  <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" onclick="openPlaceholderManager()"><i class="fa fa-cog"></i> จัดการฟิลด์</button>
+                </div>
+                <div class="d-flex flex-wrap gap-1" id="placeholderBadgeContainer">
+                  <!-- Dynamic badges will be rendered here -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" onclick="submitTemplate()">บันทึกแม่แบบ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Placeholder Management Modal -->
+<div class="modal fade" id="placeholderManagerModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">จัดการชุดข้อมูล Placeholder</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>คำอธิบาย</th>
+                <th class="text-center">ลบ</th>
+              </tr>
+            </thead>
+            <tbody id="placeholderListTable"></tbody>
+          </table>
+        </div>
+        <hr>
+        <h6>เพิ่มฟิลด์ใหม่</h6>
+        <div class="row g-2">
+          <div class="col-6"><input type="text" id="newPKey" class="form-control form-control-sm" placeholder="{{key.name}}"></div>
+          <div class="col-6"><input type="text" id="newPDesc" class="form-control form-control-sm" placeholder="คำอธิบาย"></div>
+          <div class="col-12 mt-2"><button class="btn btn-success btn-sm w-100" onclick="addNewPlaceholder()">เพิ่มฟิลด์</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let isUpdatingPreview = false;
+  let reportTemplates = [];
+  const templateModal = new bootstrap.Modal(document.getElementById('templateModal'));
+  const placeholderManagerModal = new bootstrap.Modal(document.getElementById('placeholderManagerModal'));
+  let customPlaceholders = [];
+
+  function loadReportTemplates() {
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        showLoader(false);
+        if (res.success) {
+          reportTemplates = res.data;
+          renderTemplateTable();
+        } else {
+          alert('เกิดข้อผิดพลาดในการโหลดแม่แบบ: ' + res.message);
+        }
+      })
+      .withFailureHandler(err => {
+        showLoader(false);
+        alert('Error loading report templates: ' + err.message);
+      })
+      .getReportTemplates();
+  }
+
+  function loadPlaceholders() {
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        customPlaceholders = res.data;
+        renderPlaceholderBadges();
+      }
+    }).getCustomPlaceholders();
+  }
+
+  function renderPlaceholderBadges() {
+    const container = document.getElementById('placeholderBadgeContainer');
+    container.innerHTML = customPlaceholders.map(p => `
+      <span class="badge bg-secondary cursor-pointer" onclick="copyPlaceholder('${p[0]}')" title="${p[1]}">${p[0]}</span>
+    `).join('');
+  }
+
+  function openPlaceholderManager() {
+    renderPlaceholderList();
+    placeholderManagerModal.show();
+  }
+
+  function renderPlaceholderList() {
+    const tbody = document.getElementById('placeholderListTable');
+    tbody.innerHTML = customPlaceholders.map(p => `
+      <tr>
+        <td><code>${p[0]}</code></td>
+        <td class="small">${p[1]}</td>
+        <td class="text-center"><button class="btn btn-link btn-sm text-danger p-0" onclick="deletePlaceholderKey('${p[0]}')"><i class="fa fa-trash"></i></button></td>
+      </tr>
+    `).join('');
+  }
+
+  function addNewPlaceholder() {
+    const key = document.getElementById('newPKey').value;
+    const desc = document.getElementById('newPDesc').value;
+    if(!key || !desc) return alert('กรุณากรอกข้อมูลให้ครบ');
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if(res.success) {
+        document.getElementById('newPKey').value = '';
+        document.getElementById('newPDesc').value = '';
+        loadPlaceholders();
+        setTimeout(renderPlaceholderList, 500);
+      }
+    }).saveCustomPlaceholder({ key, description: desc });
+  }
+
+  function deletePlaceholderKey(key) {
+    if(!confirm('ลบฟิลด์นี้?')) return;
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      loadPlaceholders();
+      setTimeout(renderPlaceholderList, 500);
+    }).deleteCustomPlaceholder(key);
+  }
+
+  function renderTemplateTable() {
+    const tbody = document.getElementById('templateTableBody');
+    if (reportTemplates.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center">ไม่พบแม่แบบรายงาน</td></tr>';
+      return;
+    }
+    tbody.innerHTML = reportTemplates.map(t => `
+      <tr>
+        <td>${t.TemplateName}</td>
+        <td>${t.CreatedBy}</td>
+        <td>${new Date(t.LastModifiedAt).toLocaleString('th-TH')}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary me-1" onclick="openTemplateModal('${t.TemplateID}')"><i class="fa fa-edit"></i> แก้ไข</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate('${t.TemplateID}')"><i class="fa fa-trash"></i> ลบ</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function openTemplateModal(id = null) {
+    document.getElementById('templateForm').reset();
+    document.getElementById('templateId').value = '';
+    document.getElementById('templateModalTitle').innerText = 'เพิ่มแม่แบบใหม่';
+
+    if (id) {
+      const template = reportTemplates.find(t => t.TemplateID === id);
+      if (template) {
+        document.getElementById('templateId').value = template.TemplateID;
+        document.getElementById('templateName').value = template.TemplateName;
+        document.getElementById('headerHtml').value = template.HeaderHtml;
+        document.getElementById('bodyHtml').value = template.BodyHtml;
+        document.getElementById('footerHtml').value = template.FooterHtml;
+        document.getElementById('customCss').value = template.CustomCss;
+        document.getElementById('templateModalTitle').innerText = 'แก้ไขแม่แบบรายงาน';
+      }
+    }
+    templateModal.show();
+  }
+
+  async function handleFileImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    const ext = file.name.split('.').pop().toLowerCase();
+    showLoader(true);
+    try {
+      if (ext === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+        document.getElementById('bodyHtml').value = result.value;
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer);
+        const html = XLSX.utils.sheet_to_html(workbook.Sheets[workbook.SheetNames[0]]);
+        document.getElementById('bodyHtml').value = html;
+      } else {
+        const text = await file.text();
+        document.getElementById('bodyHtml').value = text;
+      }
+      updatePreview();
+    } catch (e) {
+      alert('Error importing file: ' + e.message);
+    } finally {
+      showLoader(false);
+    }
+  }
+
+  function updatePreview() {
+    const header = document.getElementById('headerHtml').value;
+    const body = document.getElementById('bodyHtml').value;
+    const footer = document.getElementById('footerHtml').value;
+    const css = document.getElementById('customCss').value;
+    const preview = document.getElementById('livePreview');
+
+    // แทนที่ placeholder ตัวอย่างสำหรับการพรีวิว
+    let sampleBody = body
+      .replace(/{{student.name}}/g, 'นายสมชาย มุ่งมั่น')
+      .replace(/{{student.id}}/g, '66301010001')
+      .replace(/{{status}}/g, 'ผ่าน')
+      .replace(/{{percent}}/g, '85.50%');
+
+    preview.innerHTML = `
+      <style>${css}</style>
+      <div class="template-header">${header}</div>
+      <div class="template-body">${sampleBody}</div>
+      <div class="template-footer">${footer}</div>
+    `;
+  }
+
+  function copyPlaceholder(text) {
+    navigator.clipboard.writeText(text);
+    // สามารถเพิ่ม Toast แจ้งเตือนเล็กน้อยได้ที่นี่
+    alert('คัดลอก ' + text + ' แล้ว');
+  }
+
+  function submitTemplate() {
+    const templateData = {
+      TemplateID: document.getElementById('templateId').value,
+      TemplateName: document.getElementById('templateName').value,
+      HeaderHtml: document.getElementById('headerHtml').value,
+      BodyHtml: document.getElementById('bodyHtml').value,
+      FooterHtml: document.getElementById('footerHtml').value,
+CustomCss: document.getElementById('customCss').value
+    };
+
+    if (!templateData.TemplateName) {
+      alert('กรุณากรอกชื่อแม่แบบ');
+      return;
+    }
+
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        showLoader(false);
+        alert(res.message);
+        if (res.success) {
+          templateModal.hide();
+          loadReportTemplates();
+        }
+      })
+      .withFailureHandler(err => {
+        showLoader(false);
+        alert('Error saving template: ' + err.message);
+      })
+      .saveReportTemplate(templateData);
+  }
+
+  function deleteTemplate(id) {
+    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบแม่แบบรายงานนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้')) {
+      showLoader(true);
+      google.script.run
+        .withSuccessHandler(res => {
+          showLoader(false);
+          alert(res.message);
+          if (res.success) {
+            loadReportTemplates();
+          }
+        })
+        .withFailureHandler(err => {
+          showLoader(false);
+          alert('Error deleting template: ' + err.message);
+        })
+        .deleteReportTemplate(id);
+    }
+  }
+
+  loadReportTemplates();
+  loadPlaceholders();
+</script>

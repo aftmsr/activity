@@ -1,0 +1,137 @@
+<!-- remediation.html -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-tools"></i> ระบบจัดการซ่อมกิจกรรม</h5>
+    <button class="btn btn-warning btn-sm" onclick="openRemModal()">
+      <i class="fa fa-plus"></i> บันทึกการซ่อมใหม่
+    </button>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>นักเรียน</th>
+            <th>กิจกรรมที่ซ่อม</th>
+            <th>สถานะ</th>
+            <th>หมายเหตุ</th>
+            <th>ผู้บันทึก</th>
+          </tr>
+        </thead>
+        <tbody id="remTableBody">
+          <tr><td colspan="5" class="text-center">กำลังโหลดข้อมูล...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal บันทึกซ่อม -->
+<div class="modal fade" id="remModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">บันทึกผลการซ่อมกิจกรรม</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="remForm">
+          <div class="mb-3">
+            <label class="form-label">เลือกกิจกรรม</label>
+            <select id="remActId" class="form-select" onchange="loadDefaulters()"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">เลือกนักเรียน</label>
+            <select id="remStudentId" class="form-select"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">สถานะ</label>
+            <select id="remStatus" class="form-select">
+              <option value="COMPLETED">ซ่อมเรียบร้อยแล้ว</option>
+              <option value="PENDING">กำลังดำเนินการ</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">หมายเหตุ/งานที่มอบหมาย</label>
+            <textarea id="remNotes" class="form-control" rows="3"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="submitRemediation()">ยืนยันการบันทึก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const remModal = new bootstrap.Modal(document.getElementById('remModal'));
+  let activitiesList = [];
+
+  function loadRemediation() {
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        activitiesList = convertSheetDataToObject(res.activities);
+        const users = convertSheetDataToObject(res.users);
+        const rems = convertSheetDataToObject(res.remediation);
+        
+        const tbody = document.getElementById('remTableBody');
+        tbody.innerHTML = rems.map(r => {
+          const student = users.find(u => u.userId === r.studentId) || { name: r.studentId };
+          const act = activitiesList.find(a => a.actId === r.actId) || { name: r.actId };
+          return `<tr>
+            <td>${student.name}</td>
+            <td>${act.name}</td>
+            <td><span class="badge ${r.status === 'COMPLETED' ? 'bg-success' : 'bg-warning'}">${r.status}</span></td>
+            <td><small>${r.notes || '-'}</small></td>
+            <td><small>${r.updatedBy}</small></td>
+          </tr>`;
+        }).join('');
+
+        const actSelect = document.getElementById('remActId');
+        actSelect.innerHTML = '<option value="">-- เลือกกิจกรรม --</option>' + 
+          activitiesList.map(a => `<option value="${a.actId}">${a.name} (${a.academicYear}/${a.semester})</option>`).join('');
+      }
+    }).getRemediationData();
+  }
+
+  function loadDefaulters() {
+    const actId = document.getElementById('remActId').value;
+    if(!actId) return;
+    google.script.run.withSuccessHandler(res => {
+      const stuSelect = document.getElementById('remStudentId');
+      stuSelect.innerHTML = res.data.map(s => `<option value="${s.userId}">${s.name} (${s.department})</option>`).join('');
+    }).getStudentsNeedingRemediation(actId);
+  }
+
+  function openRemModal() { remModal.show(); }
+
+  function submitRemediation() {
+    const data = {
+      studentId: document.getElementById('remStudentId').value,
+      actId: document.getElementById('remActId').value,
+      status: document.getElementById('remStatus').value,
+      notes: document.getElementById('remNotes').value,
+      // ระบบจะเก็บ UpdatedBy และ UpdatedAt ที่ Code.gs อัตโนมัติ
+    };
+    if(!data.studentId || !data.actId) return alert('กรุณาเลือกข้อมูลให้ครบ');
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      alert(res.message);
+      remModal.hide();
+      loadRemediation();
+    }).saveRemediationRecord(data);
+  }
+
+  function convertSheetDataToObject(sheetData) {
+    if (!sheetData || sheetData.length < 2) return [];
+    const headers = sheetData[0];
+    return sheetData.slice(1).map(row => {
+      let obj = {};
+      headers.forEach((h, i) => obj[h] = row[i]);
+      return obj;
+    });
+  }
+  loadRemediation();
+</script>

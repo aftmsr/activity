@@ -1,0 +1,225 @@
+<div class="card shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 text-primary"><i class="fa fa-users-cog"></i> จัดการสมาชิก</h5>
+    <button class="btn btn-primary btn-sm" onclick="openMemberModal()">
+      <i class="fa fa-plus"></i> เพิ่มสมาชิก
+    </button>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>รหัส</th>
+            <th>ชื่อ-นามสกุล</th>
+            <th>อีเมล</th>
+            <th>ระดับสิทธิ์</th>
+            <th>สถานะ</th>
+            <th>แผนก/ห้อง</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="membersTableBody">
+          <tr><td colspan="7" class="text-center">กำลังโหลดข้อมูล...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Member Modal -->
+<div class="modal fade" id="memberModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">รายละเอียดสมาชิก</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="memberForm">
+          <input type="hidden" id="memberUserId">
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">รหัสสมาชิก (Student ID/Staff ID)</label>
+              <input type="text" id="memberNameId" class="form-control" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">ชื่อ-นามสกุล</label>
+              <input type="text" id="memberName" class="form-control" required>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">อีเมล</label>
+              <input type="email" id="memberEmail" class="form-control" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">รหัสผ่าน (เว้นว่างหากไม่ต้องการเปลี่ยน)</label>
+              <input type="password" id="memberPassword" class="form-control">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label">ระดับสิทธิ์</label>
+              <select id="memberRole" class="form-select" required>
+                <option value="STUDENT">นักเรียน</option>
+                <option value="STAFF">เจ้าหน้าที่</option>
+                <option value="อวท.">อวท.</option>
+                <option value="ADMIN">ผู้ดูแลระบบ</option>
+              </select>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">สถานะ</label>
+              <select id="memberStatus" class="form-select">
+                <option value="ACTIVE">ใช้งาน</option>
+                <option value="INACTIVE">ระงับ</option>
+              </select>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">แผนก/ห้อง</label>
+              <input type="text" id="memberDepartment" class="form-control">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">ตำแหน่ง/กลุ่ม</label>
+            <input type="text" id="memberPosition" class="form-control">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" onclick="submitMember()">บันทึกข้อมูล</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const memberModal = new bootstrap.Modal(document.getElementById('memberModal'));
+  let membersData = []; // To store all members for editing
+
+  function loadMembers() {
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        showLoader(false);
+        if (res.success) {
+          membersData = res.data;
+          const tbody = document.getElementById('membersTableBody');
+          if (membersData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">ไม่พบข้อมูลสมาชิก</td></tr>';
+            return;
+          }
+          tbody.innerHTML = membersData.map(m => `
+            <tr>
+              <td>${m.userId}</td>
+              <td>${m.name}</td>
+              <td>${m.email}</td>
+              <td><span class="badge bg-info text-dark">${m.role}</span></td>
+              <td><span class="badge ${m.status === 'ACTIVE' ? 'bg-success' : 'bg-danger'}">${m.status}</span></td>
+              <td>${m.department || '-'}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editMember('${m.userId}')"><i class="fa fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteMember('${m.userId}')"><i class="fa fa-trash"></i></button>
+              </td>
+            </tr>
+          `).join('');
+        } else {
+          alert('เกิดข้อผิดพลาดในการโหลดสมาชิก: ' + res.message);
+        }
+      })
+      .withFailureHandler(err => {
+        showLoader(false);
+        alert('Error loading members: ' + err.message);
+      })
+      .getUsers();
+  }
+
+  function openMemberModal(userId = null) {
+    document.getElementById('memberForm').reset();
+    document.getElementById('memberUserId').value = '';
+    document.getElementById('memberNameId').readOnly = false; // Allow editing for new user
+
+    if (userId) {
+      const member = membersData.find(m => m.userId === userId);
+      if (member) {
+        document.getElementById('memberUserId').value = member.userId;
+        document.getElementById('memberNameId').value = member.userId;
+        document.getElementById('memberNameId').readOnly = true; // Prevent changing ID for existing user
+        document.getElementById('memberName').value = member.name;
+        document.getElementById('memberEmail').value = member.email;
+        document.getElementById('memberRole').value = member.role;
+        document.getElementById('memberStatus').value = member.status;
+        document.getElementById('memberDepartment').value = member.department;
+        document.getElementById('memberPosition').value = member.position;
+        document.getElementById('memberPassword').value = ''; // Clear password field for security
+      }
+    }
+    memberModal.show();
+  }
+
+  function submitMember() {
+    const memberData = {
+      userId: document.getElementById('memberNameId').value,
+      name: document.getElementById('memberName').value,
+      email: document.getElementById('memberEmail').value,
+      role: document.getElementById('memberRole').value,
+      status: document.getElementById('memberStatus').value,
+      department: document.getElementById('memberDepartment').value,
+      position: document.getElementById('memberPosition').value,
+      password: document.getElementById('memberPassword').value // Only send if changed
+    };
+
+    if (!memberData.userId || !memberData.name || !memberData.email || !memberData.role) {
+      alert('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+      return;
+    }
+
+    showLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        showLoader(false);
+        alert(res.message);
+        if (res.success) {
+          memberModal.hide();
+          loadMembers(); // Reload table
+        }
+      })
+      .withFailureHandler(err => {
+        showLoader(false);
+        alert('Error saving member: ' + err.message);
+      })
+      .saveUser(memberData);
+  }
+
+  function editMember(userId) {
+    openMemberModal(userId);
+  }
+
+  function deleteMember(userId) {
+    if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการระงับการใช้งานสมาชิกนี้?')) {
+      return;
+    }
+    // TODO: เพิ่มการยืนยันรหัสผ่านของ Admin/Staff
+    // สำหรับตอนนี้จะเรียกฟังก์ชัน deleteMember โดยตรง
+    // ในอนาคต: อาจจะต้องมี Modal ให้กรอกรหัสผ่านก่อนเรียก google.script.run.confirmPassword(currentUser.email, password)
+    // แล้วค่อยเรียก deleteMember(userId) หากรหัสผ่านถูกต้อง
+
+    // จำลองการยืนยันรหัสผ่าน (ในระบบจริงต้องมี UI ให้กรอก)
+    const password = prompt("กรุณากรอกรหัสผ่านของคุณเพื่อยืนยันการระงับการใช้งาน:");
+    if (!password) return; // ผู้ใช้กดยกเลิก
+
+      showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if (res.success) {
+        alert(res.message);
+        loadMembers();
+      } else {
+        alert('เกิดข้อผิดพลาดในการระงับการใช้งาน: ' + res.message);
+      }
+    }).deleteUser(userId, password); // ส่งรหัสผ่านไปยืนยัน
+  }
+
+  loadMembers();
+</script>

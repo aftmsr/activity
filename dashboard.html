@@ -1,18 +1,40 @@
 <!-- dashboard.html -->
+<div class="row mb-3 no-print">
+  <div class="col-md-3">
+    <label class="form-label small fw-bold">ปีการศึกษา</label>
+    <select id="filterYear" class="form-select form-select-sm" onchange="loadDashboardStats()"></select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label small fw-bold">ภาคเรียน</label>
+    <select id="filterSemester" class="form-select form-select-sm" onchange="loadDashboardStats()"></select>
+  </div>
+  <div class="col-md-6 text-end d-flex align-items-end justify-content-end">
+    <button class="btn btn-outline-success btn-sm" onclick="exportDashboardToExcel()">
+      <i class="fa fa-file-excel"></i> ส่งออกข้อมูลสถิตินี้ (.xlsx)
+    </button>
+  </div>
+</div>
+
 <div class="row">
-  <div class="col-md-4">
+  <div class="col-md-3">
     <div class="card bg-primary text-white p-3 mb-3 text-center">
-      <h5>กิจกรรมทั้งหมด</h5>
+      <h5 class="small">กิจกรรมในเทอม</h5>
       <h2 id="totalAct">0</h2>
     </div>
   </div>
-  <div class="col-md-4">
-    <div class="card bg-success text-white p-3 mb-3 text-center">
-      <h5>เฉลี่ยการเข้าร่วม</h5>
-      <h2 id="avgAtt">0%</h2>
+  <div class="col-md-3">
+    <div class="card bg-success text-white p-3 mb-3 text-center" style="cursor: pointer" onclick="loadPage('REPORT_SUMMARY')">
+      <h5 class="small">ผ่านกิจกรรม</h5>
+      <h2 id="passCount">0</h2>
     </div>
   </div>
-  <div class="col-md-4">
+  <div class="col-md-3">
+    <div class="card bg-danger text-white p-3 mb-3 text-center" style="cursor: pointer" onclick="loadPage('REPORT_SUMMARY')">
+      <h5 class="small">ไม่ผ่านกิจกรรม</h5>
+      <h2 id="failCount">0</h2>
+    </div>
+  </div>
+  <div class="col-md-3">
     <div class="card bg-warning p-3 mb-3 text-center">
       <h5>อุทธรณ์ที่รอตรวจ</h5>
       <h2 id="pendingAppeals">0</h2>
@@ -20,26 +42,299 @@
   </div>
 </div>
 
-<div class="card p-3">
-  <canvas id="attendanceChart" width="400" height="200"></canvas>
+<div class="row">
+  <div class="col-md-8">
+    <div class="card shadow-sm mb-3 p-3">
+      <h6 class="text-primary mb-3"><i class="fa fa-chart-bar"></i> คะแนนเฉลี่ยสะสมแยกตามสาขาวิชา</h6>
+      <canvas id="deptChart" style="max-height: 280px;"></canvas>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm mb-3 p-3 text-center">
+      <h6 class="text-primary mb-3"><i class="fa fa-chart-pie"></i> สัดส่วนกิจกรรม</h6>
+      <canvas id="typeChart" style="max-height: 280px;"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm p-3">
+  <div id="calendar"></div>
+</div>
+
+<!-- Modal สำหรับจัดการกิจกรรมจากหน้า Dashboard (Reuse form logic) -->
+<div class="modal fade" id="dashActivityModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">ข้อมูลกิจกรรม</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="dashActivityForm">
+          <input type="hidden" id="dashActId">
+          <div class="mb-3">
+            <label class="form-label">ชื่อกิจกรรม</label>
+            <input type="text" id="dashActName" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">วันที่</label>
+            <input type="date" id="dashActDate" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">สถานที่</label>
+            <input type="text" id="dashActLocation" class="form-control">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" id="dashModalFooter">
+        <!-- ปุ่มจะแสดงตามสิทธิ์ -->
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<!-- SheetJS สำหรับ Export Excel -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script>
+  let dashActivities = [];
+  const dashModal = new bootstrap.Modal(document.getElementById('dashActivityModal'));
+
   function loadDashboard() {
-    // จำลองข้อมูลสถิติ
-    const ctx = document.getElementById('attendanceChart').getContext('2d');
-    new Chart(ctx, {
+    showLoader(true);
+    
+    // โหลดปฏิทินกิจกรรม
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        dashActivities = res.data;
+        renderCalendar();
+      }
+    }).getActivities();
+
+    // โหลดตัวกรองและสถิติ
+    google.script.run.withSuccessHandler(filters => {
+      if (filters.success) {
+        const yearSel = document.getElementById('filterYear');
+        const semSel = document.getElementById('filterSemester');
+        yearSel.innerHTML = filters.years.map(y => `<option value="${y}">${y}</option>`).join('');
+        semSel.innerHTML = filters.semesters.map(s => `<option value="${s}">${s}</option>`).join('');
+        
+        loadDashboardStats();
+      }
+      showLoader(false);
+    }).getTermFilters();
+  }
+
+  let deptChartInstance = null;
+  let typeChartInstance = null;
+  let lastStatsData = null;
+
+  function loadDashboardStats() {
+    const year = document.getElementById('filterYear').value;
+    const semester = document.getElementById('filterSemester').value;
+
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        lastStatsData = res;
+        renderDeptChart(res.stats, res.deptCounts);
+        renderTypeChart(res.typeStats);
+        
+        // อัปเดตการ์ดสรุป
+        document.getElementById('totalAct').innerText = res.totalActs;
+        document.getElementById('passCount').innerText = res.passFail.pass;
+        document.getElementById('failCount').innerText = res.passFail.fail;
+      }
+    }).getDashboardStats(year, semester);
+    
+    google.script.run.withSuccessHandler(res => {
+      if (res.success) {
+        document.getElementById('pendingAppeals').innerText = res.data.length;
+      }
+    }).getPendingAppeals();
+  }
+
+  function renderDeptChart(stats, counts) {
+    const ctx = document.getElementById('deptChart').getContext('2d');
+    if (deptChartInstance) deptChartInstance.destroy();
+
+    const departments = Object.keys(counts).sort();
+
+    // stats จาก server = { deptName: totalPoints } สำหรับเทอมที่เลือก
+    const avgScores = departments.map(dept => {
+      const totalPoints = stats[dept] || 0;
+      const studentCount = counts[dept] || 1;
+      return (totalPoints / studentCount).toFixed(2);
+    });
+
+    deptChartInstance = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: ['ปี 2566/1', 'ปี 2566/2', 'ปี 2567/1'],
+        labels: departments,
         datasets: [{
-          label: '% การเข้าร่วมภาพรวม',
-          data: [85, 78, 92],
-          backgroundColor: 'rgba(54, 162, 235, 0.5)'
+          label: 'คะแนนเฉลี่ยต่อคน',
+          data: avgScores,
+          backgroundColor: 'rgba(52, 152, 219, 0.7)',
+          borderColor: 'rgba(52, 152, 219, 1)',
+          borderWidth: 1
         }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'คะแนนเฉลี่ย' }
+          }
+        }
       }
     });
   }
+
+  function renderTypeChart(typeStats) {
+    const ctx = document.getElementById('typeChart').getContext('2d');
+    if (typeChartInstance) typeChartInstance.destroy();
+
+    typeChartInstance = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(typeStats),
+        datasets: [{
+          data: Object.values(typeStats),
+          backgroundColor: ['#3498db', '#2ecc71', '#f1c40f', '#e67e22', '#e74c3c']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  function renderCalendar() {
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      locale: 'th',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek'
+      },
+      events: dashActivities.map(act => ({
+        id: act.actId,
+        title: act.name,
+        start: act.date,
+        backgroundColor: act.type === 'พิเศษ' ? '#e74c3c' : '#3498db'
+      })),
+      dateClick: function(info) {
+        if (['ADMIN', 'STAFF'].includes(currentUser.role)) {
+          openDashModal(null, info.dateStr);
+        }
+      },
+      eventClick: function(info) {
+        openDashModal(info.event.id);
+      }
+    });
+    calendar.render();
+  }
+
+  /**
+   * ส่งออกข้อมูล Dashboard ปัจจุบันเป็น Excel
+   */
+  function exportDashboardToExcel() {
+    if (!lastStatsData) return alert('ไม่มีข้อมูลสำหรับส่งออก');
+    
+    const { currentTerm, passFail, totalActs, typeStats, stats, deptCounts } = lastStatsData;
+    
+    // 1. สร้างตารางสรุป
+    const summaryData = [
+      ['รายงานสถิติกิจกรรม', `ปีการศึกษา ${currentTerm.year} ภาคเรียน ${currentTerm.semester}`],
+      ['รายการ', 'จำนวน'],
+      ['จำนวนกิจกรรมทั้งหมด', totalActs],
+      ['นักเรียนที่ผ่านกิจกรรม', passFail.pass],
+      ['นักเรียนที่ไม่ผ่านกิจกรรม', passFail.fail],
+      ['', ''],
+      ['สัดส่วนประเภทกิจกรรม', ''],
+      ...Object.entries(typeStats)
+    ];
+
+    // 2. สร้างตารางคะแนนเฉลี่ยแยกแผนก
+    const deptData = [['แผนกวิชา', 'คะแนนเฉลี่ย']];
+    const latestYear = currentTerm.year;
+    if (stats[latestYear]) {
+      Object.keys(deptCounts).sort().forEach(dept => {
+        const sum = stats[latestYear][dept] || 0;
+        const count = deptCounts[dept] || 1;
+        deptData.push([dept, (sum / count).toFixed(2)]);
+      });
+    }
+
+    const wb = XLSX.utils.book_new();
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    const wsDept = XLSX.utils.aoa_to_sheet(deptData);
+    
+    XLSX.utils.book_append_sheet(wb, wsSummary, "สรุปภาพรวม");
+    XLSX.utils.book_append_sheet(wb, wsDept, "สถิติแยกแผนก");
+    
+    XLSX.writeFile(wb, `Dashboard_Report_${currentTerm.year}_${currentTerm.semester}.xlsx`);
+  }
+
+  function openDashModal(id = null, dateStr = null) {
+    const form = document.getElementById('dashActivityForm');
+    const footer = document.getElementById('dashModalFooter');
+    form.reset();
+    document.getElementById('dashActId').value = '';
+    
+    const isEditor = ['ADMIN', 'STAFF'].includes(currentUser.role);
+    
+    if (id) {
+      const act = dashActivities.find(a => a.actId === id);
+      document.getElementById('dashActId').value = act.actId;
+      document.getElementById('dashActName').value = act.name;
+      document.getElementById('dashActDate').value = new Date(act.date).toISOString().split('T')[0];
+      document.getElementById('dashActLocation').value = act.location;
+    } else if (dateStr) {
+      document.getElementById('dashActDate').value = dateStr;
+    }
+
+    // จัดการสิทธิ์การแสดงปุ่มบันทึก
+    footer.innerHTML = isEditor 
+      ? `<button type="button" class="btn btn-primary" onclick="submitDashActivity()">บันทึก</button>`
+      : `<p class="text-muted small">คุณสามารถดูข้อมูลได้อย่างเดียว</p>`;
+    
+    // ปิดการแก้ไขหากไม่มีสิทธิ์
+    Array.from(form.elements).forEach(el => el.disabled = !isEditor);
+    
+    dashModal.show();
+  }
+
+  function submitDashActivity() {
+    const data = {
+      actId: document.getElementById('dashActId').value,
+      name: document.getElementById('dashActName').value,
+      date: document.getElementById('dashActDate').value,
+      location: document.getElementById('dashActLocation').value,
+      // ดึงค่าจาก Filter Dropdown แทน Hardcode
+      academicYear: document.getElementById('filterYear').value || new Date().getFullYear() + 543,
+      semester: document.getElementById('filterSemester').value || '1',
+      type: 'ทั่วไป'
+    };
+    
+    if(!data.name || !data.date) return alert('กรุณากรอกข้อมูลที่จำเป็น');
+
+    showLoader(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      if(res.success) {
+        dashModal.hide();
+        loadDashboard();
+      } else {
+        alert(res.message);
+      }
+    }).saveActivity(data);
+  }
+
   loadDashboard();
 </script>

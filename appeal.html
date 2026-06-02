@@ -1,0 +1,97 @@
+<div class="row">
+  <div class="col-md-5">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-white"><h5 class="mb-0 text-primary">ยื่นอุทธรณ์/แก้ไขกิจกรรม</h5></div>
+      <div class="card-body">
+        <form id="appealForm">
+          <div class="mb-3">
+            <label class="form-label">เลือกกิจกรรมที่ต้องการแก้ไข</label>
+            <select id="appActId" class="form-select" required>
+              <option value="">-- เลือกกิจกรรมที่ขาด --</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">เหตุผล/คำชี้แจง</label>
+            <textarea id="appNotes" class="form-control" rows="3" placeholder="ระบุเหตุผลที่ไม่ได้เข้าร่วม หรือรายละเอียดการซ่อม"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">แนบหลักฐาน (รูปภาพไม่เกิน 3MB)</label>
+            <input type="file" id="appFile" class="form-control" accept="image/*">
+          </div>
+          <button type="button" class="btn btn-primary w-100" onclick="submitAppeal()">ส่งคำร้องอุทธรณ์</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white"><h5 class="mb-0 text-secondary">ประวัติการยื่นอุทธรณ์</h5></div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>กิจกรรม</th><th>สถานะ</th><th>วันที่</th></tr></thead>
+          <tbody id="appealHistoryBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function loadAppealData() {
+    google.script.run.withSuccessHandler(res => {
+      if(res.success) {
+        const select = document.getElementById('appActId');
+        select.innerHTML = '<option value="">-- เลือกกิจกรรมที่ขาด --</option>' + 
+          res.missing.map(m => `<option value="${m.actId}">${m.name} (${m.semester}/${m.year})</option>`).join('');
+        
+        document.getElementById('appealHistoryBody').innerHTML = res.appeals.map(a => `
+          <tr>
+            <td>${a.actName}</td>
+            <td><span class="badge ${a.status === 'APPROVED' || a.status === 'COMPLETED' ? 'bg-success' : 'bg-warning'}">${a.status}</span></td>
+            <td><small>${new Date(a.updatedAt).toLocaleDateString('th-TH')}</small></td>
+          </tr>
+        `).join('');
+      }
+    }).getStudentMissingActivities();
+  }
+
+  async function submitAppeal() {
+    const actId = document.getElementById('appActId').value;
+    const notes = document.getElementById('appNotes').value;
+    const fileInput = document.getElementById('appFile');
+    
+    if(!actId) return alert('กรุณาเลือกกิจกรรม');
+    
+    showLoader(true);
+    let evidenceUrl = '';
+    if(fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+      const base64Promise = new Promise(resolve => {
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+      const base64Data = await base64Promise;
+      const uploadRes = await new Promise(resolve => {
+        google.script.run.withSuccessHandler(resolve).handleFileUpload(base64Data, file.name, file.type, 'APPEALS');
+      });
+      if(uploadRes.success) evidenceUrl = uploadRes.url;
+    }
+
+    google.script.run.withSuccessHandler(res => {
+      showLoader(false);
+      alert(res.message);
+      if(res.success) {
+        document.getElementById('appealForm').reset();
+        loadAppealData();
+      }
+    }).saveRemediationRecord({
+      studentId: currentUser.userId,
+      actId: actId,
+      notes: notes,
+      evidenceUrl: evidenceUrl,
+      status: 'PENDING'
+    });
+  }
+  loadAppealData();
+</script>
