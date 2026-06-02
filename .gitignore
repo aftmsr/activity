@@ -9,3 +9,7 @@ npm-debug.log*
 # โฟลเดอร์ที่ไม่จำเป็น
 node_modules/
 .DS_Store
+
+# ป้องกันการอัปโหลดโค้ด .gs และเอกสาร .md ไปยัง GitHub
+*.gs
+*.md
