@@ -33,6 +33,32 @@
 
       <div class="card bg-light border-0 mb-4">
         <div class="card-body">
+          <h6 class="fw-bold text-primary"><i class="fas fa-paint-brush"></i> การปรับแต่งหน้าเข้าสู่ระบบ (Login Page Customization)</h6>
+          <p class="small text-muted mb-3">ปรับแต่งรูปภาพพื้นหลังและข้อความที่ปรากฏบนหน้าแรก/หน้าเข้าสู่ระบบ</p>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">URL รูปภาพพื้นหลัง (ฝั่งซ้ายของหน้าจอ)</label>
+            <input type="text" id="LOGIN_BG_URL" class="form-control form-control-sm" placeholder="เช่น https://domain.com/path/to/image.jpg (ปล่อยว่างเพื่อใช้เฉดสีไล่สีเริ่มต้น)">
+            <small class="text-muted" style="font-size: 0.75rem;">รองรับลิงก์รูปภาพโดยตรง เช่น จาก Google Drive, Unsplash, หรือฝากไฟล์ภาพสาธารณะทั่วไป</small>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label small fw-bold">ข้อความหัวข้อหลัก (Title)</label>
+              <input type="text" id="LOGIN_TITLE" class="form-control form-control-sm" placeholder="เช่น ระบบบริหารจัดการกิจกรรม">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label small fw-bold">ข้อความหัวข้อย่อย (Subtitle)</label>
+              <input type="text" id="LOGIN_SUBTITLE" class="form-control form-control-sm" placeholder="เช่น วิทยาลัยการอาชีพแม่สะเรียง">
+            </div>
+            <div class="col-md-12 mb-3">
+              <label class="form-label small fw-bold">ข้อความอธิบายรายละเอียด (Description)</label>
+              <textarea id="LOGIN_DESC" class="form-control form-control-sm" rows="3" placeholder="เช่น ติดตาม บันทึก และจัดการกิจกรรมนักศึกษา..."></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card bg-light border-0 mb-4">
+        <div class="card-body">
           <h6 class="fw-bold text-success"><i class="fab fa-line"></i> การตั้งค่า LINE Messaging API (LINE OA)</h6>
           <p class="small text-muted mb-3">ใช้สำหรับส่งแจ้งเตือนเข้ากลุ่มแทน LINE Notify ที่เลิกใช้ไป</p>
           <div class="mb-3">
@@ -87,7 +113,11 @@
       MAX_IMG_SIZE: document.getElementById('MAX_IMG_SIZE').value,
       PASS_PERCENTAGE: document.getElementById('PASS_PERCENTAGE').value,
       LINE_CHANNEL_ACCESS_TOKEN: document.getElementById('LINE_CHANNEL_ACCESS_TOKEN').value,
-      LINE_TARGET_ID: document.getElementById('LINE_TARGET_ID').value
+      LINE_TARGET_ID: document.getElementById('LINE_TARGET_ID').value,
+      LOGIN_BG_URL: document.getElementById('LOGIN_BG_URL').value,
+      LOGIN_TITLE: document.getElementById('LOGIN_TITLE').value,
+      LOGIN_SUBTITLE: document.getElementById('LOGIN_SUBTITLE').value,
+      LOGIN_DESC: document.getElementById('LOGIN_DESC').value
     }; // เพิ่ม PASS_PERCENTAGE
 
     showLoader(true);
