@@ -41,32 +41,41 @@
     // Mock google.script.run using ES6 Proxy
     window.google = window.google || {};
     window.google.script = window.google.script || {};
-    window.google.script.run = new Proxy({}, {
+    
+    const proxyTarget = {
+      _successHandler: null,
+      _failureHandler: null
+    };
+
+    window.google.script.run = new Proxy(proxyTarget, {
       get: function(target, prop) {
         if (prop === "withSuccessHandler") {
           return function(callback) {
-            window.google.script.run._successHandler = callback;
+            target._successHandler = callback;
             return window.google.script.run;
           };
         }
         if (prop === "withFailureHandler") {
           return function(callback) {
-            window.google.script.run._failureHandler = callback;
+            target._failureHandler = callback;
             return window.google.script.run;
           };
+        }
+        if (prop === "_successHandler" || prop === "_failureHandler") {
+          return target[prop];
         }
         
         // Return a function dynamically for the requested backend method name
         return function(...args) {
-          const successHandler = window.google.script.run._successHandler || (() => {});
-          const failureHandler = window.google.script.run._failureHandler || (err => {
+          const successHandler = target._successHandler || (() => {});
+          const failureHandler = target._failureHandler || (err => {
             console.error("Server Error:", err);
             if (typeof showLoader === 'function') showLoader(false);
           });
           
           // Clear callbacks for the next execution
-          window.google.script.run._successHandler = null;
-          window.google.script.run._failureHandler = null;
+          target._successHandler = null;
+          target._failureHandler = null;
           
           callServer(prop, args)
             .then(res => {
