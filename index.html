@@ -7,9 +7,13 @@
     const BACKEND_API_URL = "https://script.google.com/macros/s/AKfycbxhos3WZiIDJic5qZUrrFsWh9kkC4894SyjLiYdEYV8J1ggpw8Zv0G1ovcXhW1eYcqn/exec";
 
     function callServer(functionName, args = []) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
+
       return fetch(BACKEND_API_URL, {
         method: "POST",
         mode: "cors",
+        signal: controller.signal,
         headers: {
           "Content-Type": "text/plain;charset=utf-8"
         },
@@ -19,10 +23,18 @@
         })
       })
       .then(response => {
+        clearTimeout(timeoutId);
         if (!response.ok) {
           throw new Error("HTTP error " + response.status);
         }
         return response.json();
+      })
+      .catch(err => {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          throw new Error("หมดเวลารอคอยข้อมูลจากเซิร์ฟเวอร์ (Timeout 10s)");
+        }
+        throw err;
       });
     }
 
@@ -47,7 +59,10 @@
         // Return a function dynamically for the requested backend method name
         return function(...args) {
           const successHandler = window.google.script.run._successHandler || (() => {});
-          const failureHandler = window.google.script.run._failureHandler || (err => console.error("Server Error:", err));
+          const failureHandler = window.google.script.run._failureHandler || (err => {
+            console.error("Server Error:", err);
+            if (typeof showLoader === 'function') showLoader(false);
+          });
           
           // Clear callbacks for the next execution
           window.google.script.run._successHandler = null;
@@ -241,6 +256,12 @@
 
   <!-- ===== Login Section ===== -->
   <div id="loginSection" class="login-wrapper">
+    <!-- Connection Status Badge -->
+    <div id="statusBadgeContainer" style="position: absolute; top: 20px; right: 20px; z-index: 10;">
+      <span id="dbStatusBadge" class="badge bg-warning text-dark px-3 py-2 shadow-sm" style="font-size: 0.82rem; border-radius: 30px; display: flex; align-items: center; gap: 6px; font-weight: 500;">
+        <i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบการเชื่อมต่อฐานข้อมูล...
+      </span>
+    </div>
     <!-- Left Hero Panel -->
     <div class="login-hero">
       <i class="fas fa-calendar-check float-icon"></i>
@@ -389,11 +410,19 @@
             currentUser = res.user;
             document.getElementById('settingsToggle').style.display = 'none';
             document.getElementById('settingsPanel').classList.remove('active');
+            if (document.getElementById('statusBadgeContainer')) {
+              document.getElementById('statusBadgeContainer').style.display = 'none';
+            }
             initUI();
           } else {
             errorMsg.textContent = res.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
             errorEl.classList.add('show');
           }
+        })
+        .withFailureHandler(err => {
+          showLoader(false);
+          errorMsg.textContent = 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้: ' + (err.message || err || 'ตรวจพบปัญหา CORS หรือสิทธิ์เข้าถึง');
+          errorEl.classList.add('show');
         })
         .login(email, password);
     }
@@ -456,10 +485,17 @@
           showLoader(false);
           if(res.success) {
             currentUser = res.user;
+            if (document.getElementById('statusBadgeContainer')) {
+              document.getElementById('statusBadgeContainer').style.display = 'none';
+            }
             initUI();
           } else {
             alert(res.message);
           }
+        })
+        .withFailureHandler(err => {
+          showLoader(false);
+          alert('ไม่สามารถล็อกอินด้วย Google ได้: ' + (err.message || err));
         })
         .loginWithGoogle(response.credential); // ส่ง ID Token ไปยัง Server
     }
@@ -571,6 +607,7 @@
     let publicSettings = {};
 
     function loadPublicSettings() {
+      const badge = document.getElementById('dbStatusBadge');
       google.script.run
         .withSuccessHandler(res => {
           if (res) {
@@ -579,6 +616,18 @@
               fetchedClientId = res.GOOGLE_CLIENT_ID;
             }
             
+            // Update Connection Status Badge
+            if (badge) {
+              badge.className = "badge bg-success text-white px-3 py-2 shadow-sm";
+              badge.innerHTML = `<i class="fas fa-check-circle"></i> เชื่อมต่อฐานข้อมูลสำเร็จ`;
+              setTimeout(() => {
+                badge.style.opacity = '0';
+                setTimeout(() => {
+                  if (badge.parentElement) badge.parentElement.style.display = 'none';
+                }, 300);
+              }, 4000);
+            }
+
             // Apply customized texts
             if (res.LOGIN_TITLE) {
               document.querySelector('.hero-content h1').innerText = res.LOGIN_TITLE;
@@ -603,6 +652,10 @@
         })
         .withFailureHandler(err => {
           console.error("Failed to load public settings: ", err);
+          if (badge) {
+            badge.className = "badge bg-danger text-white px-3 py-2 shadow-sm";
+            badge.innerHTML = `<i class="fas fa-exclamation-triangle"></i> การเชื่อมต่อฐานข้อมูลล้มเหลว (ตรวจสอบสิทธิ์)`;
+          }
           renderGoogleButton();
         })
         .getPublicSettings();
