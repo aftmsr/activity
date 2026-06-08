@@ -250,13 +250,45 @@
     }
 
     /* ===== Main App ===== */
-    .sidebar { height: 100vh; background: #1a252f; color: white; position: fixed; width: 260px; transition: 0.3s; z-index: 1000; }
-    .content { margin-left: 260px; padding: 30px; transition: 0.3s; }
-    .nav-link { color: #95a5a6; cursor: pointer; padding: 12px 20px; border-radius: 0; transition: 0.2s; border-left: 4px solid transparent; }
-    .nav-link:hover, .nav-link.active { color: white; background: #2c3e50; border-left: 4px solid #3498db; }
-    .nav-link i { margin-right: 10px; width: 20px; text-align: center; }
-    .user-info { padding: 20px; background: #121920; border-bottom: 1px solid #2c3e50; }
-    @media (max-width: 768px) { .sidebar { left: -260px; } .sidebar.active { left: 0; } .content { margin-left: 0; } }
+    .sidebar {
+      height: calc(100vh - 40px); margin: 20px; border-radius: var(--radius);
+      background: white; color: var(--text-dark); position: fixed; width: 260px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000;
+      box-shadow: var(--shadow-sm); overflow-y: auto; overflow-x: hidden;
+      display: flex; flex-direction: column;
+    }
+    .sidebar::-webkit-scrollbar { width: 6px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    .sidebar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+    
+    .content { margin-left: 300px; padding: 30px 30px 30px 10px; transition: 0.3s; min-height: 100vh; }
+    
+    .nav-link { 
+      color: var(--text-muted); cursor: pointer; padding: 12px 20px; margin: 4px 16px; 
+      border-radius: 12px; transition: all 0.2s ease; border: none; font-weight: 500;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .nav-link:hover { color: var(--primary); background: var(--input-bg); transform: translateX(4px); }
+    .nav-link.active { color: white; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); box-shadow: 0 4px 12px rgba(26,54,93,0.2); }
+    .nav-link i { width: 20px; text-align: center; font-size: 1.1rem; }
+    
+    .user-info { 
+      padding: 24px 20px; background: transparent; border-bottom: 1px dashed var(--input-border); 
+      margin-bottom: 10px;
+    }
+    .user-info .avatar { color: var(--primary); }
+    .user-info #userName { color: var(--text-dark); font-size: 1.1rem; }
+    
+    .logout-btn-container { margin-top: auto; padding: 20px; border-top: 1px dashed var(--input-border); }
+    .nav-link.logout-btn { color: #dc2626; margin: 0; width: 100%; justify-content: center; background: #fef2f2; }
+    .nav-link.logout-btn:hover { background: #fee2e2; color: #b91c1c; transform: translateY(-2px); }
+
+    @media (max-width: 900px) { 
+      .sidebar { left: -300px; margin-left: 0; height: 100vh; margin: 0; border-radius: 0; } 
+      .sidebar.active { left: 0; box-shadow: var(--shadow-lg); } 
+      .content { margin-left: 0; padding: 20px; } 
+    }
   </style>
 </head>
 <body>
@@ -379,8 +411,8 @@
       <nav class="nav flex-column mt-3" id="menuList">
         <!-- Dynamic Menu -->
       </nav>
-      <div style="position: absolute; bottom: 0; width: 100%; p: 10px;">
-        <button onclick="handleLogout()" class="nav-link w-100 text-start border-0 bg-transparent text-danger">
+      <div class="logout-btn-container">
+        <button onclick="handleLogout()" class="nav-link logout-btn border-0">
           <i class="fa fa-sign-out-alt"></i> ออกจากระบบ
         </button>
       </div>
